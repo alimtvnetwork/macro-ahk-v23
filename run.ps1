@@ -28,6 +28,7 @@ param(
     [Alias('u')][switch]$uninstall,
     [Alias('ri')][switch]$reinstall,
     [Alias('y')][switch]$yes,
+    [Alias('ro')][switch]$reportonly,
     [switch]$strict,
     [Parameter(ValueFromRemainingArguments = $true)]$ExtraArgs
 )
@@ -36,6 +37,7 @@ param(
 if ($ExtraArgs) {
     foreach ($a in $ExtraArgs) {
         if ($a -is [string] -and ($a -ieq '--yes' -or $a -ieq '--y')) { $yes = $true }
+        if ($a -is [string] -and ($a -ieq '--report-only' -or $a -ieq '--reportonly' -or $a -ieq '--ro')) { $reportonly = $true }
     }
 }
 
@@ -176,6 +178,17 @@ if ($downloadchrome) { Download-ChromeForTesting; exit 0 }
 if ($help) { Show-Help; exit 0 }
 
 if ($uninstall -or $reinstall) {
+    # --report-only forces dry mode and implies -y (nothing is deleted, so no
+    # destructive prompt is required). It is also incompatible with -reinstall
+    # because there would be nothing to "reinstall" from.
+    if ($reportonly) {
+        if ($reinstall) {
+            Write-Host ""
+            Write-Host "  [error]   --report-only cannot be combined with -reinstall (dry run does not delete anything)." -ForegroundColor Red
+            exit 1
+        }
+        $yes = $true
+    }
     if (-not $yes) {
         $action = if ($reinstall) { "UNINSTALL + REINSTALL" } else { "UNINSTALL" }
         Write-Host ""
@@ -202,8 +215,15 @@ if ($uninstall -or $reinstall) {
         Write-Host "#  REINSTALL  ::  PHASE 1/2  ->  UNINSTALL" -ForegroundColor Magenta
         Write-Host "########################################" -ForegroundColor Magenta
     }
+    if ($reportonly) {
+        Write-Host ""
+        Write-Host "########################################" -ForegroundColor DarkCyan
+        Write-Host "#  UNINSTALL  ::  REPORT-ONLY (dry run)" -ForegroundColor DarkCyan
+        Write-Host "#  No files will be deleted." -ForegroundColor DarkCyan
+        Write-Host "########################################" -ForegroundColor DarkCyan
+    }
     $phase1Sw = [System.Diagnostics.Stopwatch]::StartNew()
-    Invoke-Uninstall | Out-Null
+    Invoke-Uninstall -DryRun:$reportonly | Out-Null
     $phase1Sw.Stop()
 
     if ($uninstall -and -not $reinstall) {
