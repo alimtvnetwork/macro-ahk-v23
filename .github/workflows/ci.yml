@@ -127,23 +127,49 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nm-typecheck-
 
+      # ── TypeScript incremental cache ────────────────────────────
+      # tsc writes a `.tsbuildinfo` file per project when invoked
+      # with `--incremental`. On the next run it skips re-checking
+      # files whose inputs haven't changed → 3–5× faster on cache
+      # hits. Cache is keyed on the union of every standalone
+      # tsconfig + the source trees they cover, so any source or
+      # config edit invalidates only when it actually matters.
+      # `restore-keys` lets us fall back to the most recent build
+      # info even on a partial miss (e.g. one file changed).
+      - name: Cache TypeScript incremental build info
+        uses: actions/cache@v4
+        with:
+          path: .cache/tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ hashFiles('tsconfig.sdk.json', 'tsconfig.xpath.json', 'tsconfig.payment-banner-hider.json', 'tsconfig.macro.build.json', 'standalone-scripts/**/*.ts', 'standalone-scripts/**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-
+
+      - name: Ensure tsbuildinfo cache dir exists
+        run: mkdir -p .cache/tsbuildinfo
+
       - name: Install dependencies
         run: pnpm install --prefer-offline --no-frozen-lockfile
 
-      # Compile each standalone-script tsconfig with --noEmit. Any
-      # TS2304 (missing global), TS2345 (bad arg type), etc fails
-      # the job with inline annotations on the offending line.
+      # Compile each standalone-script tsconfig with --noEmit and
+      # --incremental. The `--tsBuildInfoFile` flag points at a
+      # per-project file inside `.cache/tsbuildinfo/` so all four
+      # checks share one cache directory (single cache action) but
+      # each gets its own buildinfo (no cross-project corruption).
+      # Any TS2304 (missing global), TS2345 (bad arg type), etc.
+      # still fails the job with inline annotations on the offending
+      # line — incremental mode does NOT skip type errors, only
+      # already-validated unchanged files.
       - name: Typecheck · Marco SDK
-        run: npx tsc --noEmit -p tsconfig.sdk.json
+        run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsbuildinfo/sdk.tsbuildinfo -p tsconfig.sdk.json
 
       - name: Typecheck · XPath
-        run: npx tsc --noEmit -p tsconfig.xpath.json
+        run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsbuildinfo/xpath.tsbuildinfo -p tsconfig.xpath.json
 
       - name: Typecheck · Payment Banner Hider
-        run: npx tsc --noEmit -p tsconfig.payment-banner-hider.json
+        run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsbuildinfo/payment-banner-hider.tsbuildinfo -p tsconfig.payment-banner-hider.json
 
       - name: Typecheck · Macro Controller
-        run: npx tsc --noEmit -p tsconfig.macro.build.json
+        run: npx tsc --noEmit --incremental --tsBuildInfoFile .cache/tsbuildinfo/macro.tsbuildinfo -p tsconfig.macro.build.json
 
   # ════════════════════════════════════════════════════════════
   # Job 0c: ESLint Standalone Scripts — fast-fail lint guard
