@@ -40,6 +40,8 @@ function Show-Help {
     Write-Host "  -u,  -uninstall    Remove dist/, node_modules, caches & test artifacts (no rebuild)"
     Write-Host "  -ri, -reinstall    Run uninstall, then re-launch .\run.ps1 with no flags"
     Write-Host "  -y,  -yes, --yes   Skip the uninstall/reinstall confirmation prompt"
+    Write-Host "  -ro, -reportonly,  Dry-run uninstall: write uninstall-report.dry-run.json,"
+    Write-Host "       --report-only delete nothing (implies -y; cannot combine with -ri)"
     Write-Host ""
     Write-Host "EXAMPLES:" -ForegroundColor Yellow
     Write-Host "  .\run.ps1                         # Full build"
@@ -55,6 +57,7 @@ function Show-Help {
     Write-Host "  .\run.ps1 -u                       # Uninstall (prompts for confirmation)"
     Write-Host "  .\run.ps1 -u -y                    # Uninstall, no prompt"
     Write-Host "  .\run.ps1 -ri --yes                # Reinstall, no prompt"
+    Write-Host "  .\run.ps1 -u --report-only         # Dry-run uninstall (writes report, deletes nothing)"
     Write-Host ""
     Write-Host "PROFILES:" -ForegroundColor Yellow
     $profiles = Get-AvailableProfiles

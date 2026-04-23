@@ -72,7 +72,8 @@ function Remove-PathSafe {
     param(
         [string]$Path,
         [string]$Label,
-        [string]$Phase = "unknown"
+        [string]$Phase = "unknown",
+        [switch]$DryRun
     )
     if ([string]::IsNullOrWhiteSpace($Path)) {
         Add-UninstallReportEntry -Phase $Phase -Label $Label -Path $Path -Status "missing"
@@ -83,6 +84,11 @@ function Remove-PathSafe {
         return $false
     }
     $size = Get-PathSizeBytes -Path $Path
+    if ($DryRun) {
+        Write-Host "  [dry-run] would remove $Label  ($size bytes)" -ForegroundColor DarkCyan
+        Add-UninstallReportEntry -Phase $Phase -Label $Label -Path $Path -Status "would_remove" -SizeBytes $size
+        return $true
+    }
     try {
         Remove-Item -Recurse -Force -LiteralPath $Path -ErrorAction Stop
         Write-Host "  [removed] $Label" -ForegroundColor DarkGreen
@@ -101,12 +107,13 @@ function Remove-GlobInDir {
         [string]$Dir,
         [string]$Pattern,
         [string]$Label,
-        [string]$Phase = "unknown"
+        [string]$Phase = "unknown",
+        [switch]$DryRun
     )
     if ([string]::IsNullOrWhiteSpace($Dir) -or -not (Test-Path -LiteralPath $Dir)) { return 0 }
     $count = 0
     Get-ChildItem -LiteralPath $Dir -Filter $Pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
-        if (Remove-PathSafe -Path $_.FullName -Label "$Label -> $($_.Name)" -Phase $Phase) { $count++ }
+        if (Remove-PathSafe -Path $_.FullName -Label "$Label -> $($_.Name)" -Phase $Phase -DryRun:$DryRun) { $count++ }
     }
     return $count
 }
@@ -115,12 +122,14 @@ function Write-UninstallReport {
     param(
         [string]$RootDir,
         [System.Diagnostics.Stopwatch]$Stopwatch,
-        [int]$RemovedCount
+        [int]$RemovedCount,
+        [switch]$DryRun
     )
-    $reportPath = Join-Path $RootDir "uninstall-report.json"
+    $reportFileName = if ($DryRun) { "uninstall-report.dry-run.json" } else { "uninstall-report.json" }
+    $reportPath = Join-Path $RootDir $reportFileName
     $entries = $script:UninstallReportEntries.ToArray()
 
-    $byStatus = @{ removed = 0; missing = 0; error = 0 }
+    $byStatus = @{ removed = 0; missing = 0; error = 0; would_remove = 0 }
     $totalBytes = [int64]0
     foreach ($e in $entries) {
         if ($byStatus.ContainsKey($e.status)) { $byStatus[$e.status]++ } else { $byStatus[$e.status] = 1 }
@@ -141,6 +150,7 @@ function Write-UninstallReport {
                 removed        = 0
                 missing        = 0
                 errors         = 0
+                wouldRemove    = 0
                 bytesReclaimed = [int64]0
             }
         }
@@ -150,6 +160,7 @@ function Write-UninstallReport {
             "removed" { $bucket.removed++; $bucket.bytesReclaimed += [int64]$e.sizeBytes }
             "missing" { $bucket.missing++ }
             "error"   { $bucket.errors++ }
+            "would_remove" { $bucket.wouldRemove++; $bucket.bytesReclaimed += [int64]$e.sizeBytes }
             default   { }
         }
     }
@@ -160,11 +171,14 @@ function Write-UninstallReport {
         schemaVersion   = 1
         project         = $script:ProjectName
         generatedAt     = (Get-Date).ToString("o")
+        mode            = if ($DryRun) { "report-only" } else { "destructive" }
+        dryRun          = [bool]$DryRun
         rootDir         = $RootDir
         extensionDir    = $script:ExtensionDir
         durationMs      = if ($Stopwatch) { [int64]$Stopwatch.ElapsedMilliseconds } else { 0 }
         totalAttempted  = $entries.Count
-        totalRemoved    = $RemovedCount
+        totalRemoved    = if ($DryRun) { 0 } else { $RemovedCount }
+        totalWouldRemove = if ($DryRun) { $RemovedCount } else { 0 }
         totalMissing    = $byStatus["missing"]
         totalErrors     = $byStatus["error"]
         bytesReclaimed  = $totalBytes
@@ -175,34 +189,56 @@ function Write-UninstallReport {
     try {
         $json = $report | ConvertTo-Json -Depth 6
         Set-Content -LiteralPath $reportPath -Value $json -Encoding UTF8 -ErrorAction Stop
-        Write-Host "  [report]  uninstall-report.json -> $reportPath" -ForegroundColor Cyan
-        Write-Host "            removed=$($report.totalRemoved)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+        $headerLabel = if ($DryRun) { "[dry-run]" } else { "[report] " }
+        Write-Host "  $headerLabel $reportFileName -> $reportPath" -ForegroundColor Cyan
+        if ($DryRun) {
+            Write-Host "            would_remove=$($report.totalWouldRemove)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+        } else {
+            Write-Host "            removed=$($report.totalRemoved)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+        }
 
         # Per-phase breakdown lines for at-a-glance inspection in the console.
         if ($phasesArray.Count -gt 0) {
             Write-Host "  [phases]  per-phase breakdown:" -ForegroundColor Cyan
             foreach ($p in $phasesArray) {
-                $line = "            {0,-20} attempted={1,-3} removed={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
-                    $p.phase, $p.totalAttempted, $p.removed, $p.missing, $p.errors, $p.bytesReclaimed
+                if ($DryRun) {
+                    $line = "            {0,-20} attempted={1,-3} would_remove={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
+                        $p.phase, $p.totalAttempted, $p.wouldRemove, $p.missing, $p.errors, $p.bytesReclaimed
+                } else {
+                    $line = "            {0,-20} attempted={1,-3} removed={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
+                        $p.phase, $p.totalAttempted, $p.removed, $p.missing, $p.errors, $p.bytesReclaimed
+                }
                 $color = if ($p.errors -gt 0) { "Yellow" } else { "DarkCyan" }
                 Write-Host $line -ForegroundColor $color
             }
         }
 
         # Compact one-line JSON summary mirrored to the console for quick scanning / log scraping.
-        $summary = [pscustomobject]@{
-            removed  = [int]$report.totalRemoved
-            missing  = [int]$report.totalMissing
-            errors   = [int]$report.totalErrors
-            bytes    = [int64]$totalBytes
-            phases   = $phasesArray.Count
+        if ($DryRun) {
+            $summary = [pscustomobject]@{
+                mode         = "report-only"
+                wouldRemove  = [int]$report.totalWouldRemove
+                missing      = [int]$report.totalMissing
+                errors       = [int]$report.totalErrors
+                bytes        = [int64]$totalBytes
+                phases       = $phasesArray.Count
+            }
+        } else {
+            $summary = [pscustomobject]@{
+                mode     = "destructive"
+                removed  = [int]$report.totalRemoved
+                missing  = [int]$report.totalMissing
+                errors   = [int]$report.totalErrors
+                bytes    = [int64]$totalBytes
+                phases   = $phasesArray.Count
+            }
         }
         $summaryJson = $summary | ConvertTo-Json -Compress
         Write-Host ""
-        Write-Host "  [summary] uninstall-report.json:" -ForegroundColor Cyan
+        Write-Host "  [summary] $reportFileName" -ForegroundColor Cyan
         Write-Host "            $summaryJson" -ForegroundColor Gray
     } catch {
-        Write-Host "  [WARN]    Failed to write uninstall-report.json: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  [WARN]    Failed to write ${reportFileName}: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
@@ -216,10 +252,15 @@ function Write-UninstallReport {
     entry per attempted path (status: removed | missing | error).
 #>
 function Invoke-Uninstall {
+    param(
+        [switch]$DryRun
+    )
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Magenta
-    Write-Host "  $($script:ProjectName) -- UNINSTALL" -ForegroundColor Magenta
-    Write-Host "========================================" -ForegroundColor Magenta
+    $bannerSuffix = if ($DryRun) { " (REPORT-ONLY / DRY RUN)" } else { "" }
+    $bannerColor  = if ($DryRun) { "DarkCyan" } else { "Magenta" }
+    Write-Host "========================================" -ForegroundColor $bannerColor
+    Write-Host "  $($script:ProjectName) -- UNINSTALL$bannerSuffix" -ForegroundColor $bannerColor
+    Write-Host "========================================" -ForegroundColor $bannerColor
     Write-Host ""
 
     # Reset collector for this run.
@@ -239,7 +280,7 @@ function Invoke-Uninstall {
     try {
         foreach ($cp in $configuredPaths) {
             $abs = Join-Path $extDir $cp
-            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "cleanPaths") { $removed++ }
+            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "cleanPaths" -DryRun:$DryRun) { $removed++ }
         }
     } finally { Pop-Location }
 
@@ -250,7 +291,7 @@ function Invoke-Uninstall {
     try {
         foreach ($cp in $extraCaches) {
             $abs = Join-Path $extDir $cp
-            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "buildCaches") { $removed++ }
+            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "buildCaches" -DryRun:$DryRun) { $removed++ }
         }
     } finally { Pop-Location }
 
@@ -262,12 +303,12 @@ function Invoke-Uninstall {
         foreach ($pkg in $packages) {
             foreach ($sub in @("dist", "node_modules", ".turbo", ".cache")) {
                 $target = Join-Path $pkg.FullName $sub
-                if (Remove-PathSafe -Path $target -Label "standalone-scripts\$($pkg.Name)\$sub" -Phase "standaloneScripts") { $removed++ }
+                if (Remove-PathSafe -Path $target -Label "standalone-scripts\$($pkg.Name)\$sub" -Phase "standaloneScripts" -DryRun:$DryRun) { $removed++ }
             }
         }
         $generated = Join-Path $standaloneRoot "_generated"
         if (Test-Path $generated) {
-            if (Remove-PathSafe -Path $generated -Label "standalone-scripts\_generated" -Phase "standaloneScripts") { $removed++ }
+            if (Remove-PathSafe -Path $generated -Label "standalone-scripts\_generated" -Phase "standaloneScripts" -DryRun:$DryRun) { $removed++ }
         }
     } else {
         Write-Host "  [skip]    no standalone-scripts/ folder" -ForegroundColor DarkGray
@@ -284,24 +325,33 @@ function Invoke-Uninstall {
         (Join-Path $rootDir "coverage")
     )
     foreach ($p in $auxPaths) {
-        if (Remove-PathSafe -Path $p -Label $p -Phase "auxArtifacts") { $removed++ }
+        if (Remove-PathSafe -Path $p -Label $p -Phase "auxArtifacts" -DryRun:$DryRun) { $removed++ }
     }
-    $removed += (Remove-GlobInDir -Dir $rootDir -Pattern "*.tsbuildinfo" -Label "tsbuildinfo" -Phase "auxArtifacts")
+    $removed += (Remove-GlobInDir -Dir $rootDir -Pattern "*.tsbuildinfo" -Label "tsbuildinfo" -Phase "auxArtifacts" -DryRun:$DryRun)
 
     # 5. Notice about the deployed Chrome extension
     Write-Host "[5/5] Browser-side cleanup notice..." -ForegroundColor Yellow
-    Write-Host "  [info]    Open chrome://extensions and remove any unpacked Marco copy manually." -ForegroundColor Cyan
+    if ($DryRun) {
+        Write-Host "  [dry-run] Would remind you to remove the unpacked Marco copy from chrome://extensions." -ForegroundColor DarkCyan
+    } else {
+        Write-Host "  [info]    Open chrome://extensions and remove any unpacked Marco copy manually." -ForegroundColor Cyan
+    }
     Write-Host "  [info]    Profiles + bookmarks are NOT touched by this script." -ForegroundColor Cyan
 
     $sw.Stop()
 
     # Emit the JSON report before printing the final banner.
-    Write-UninstallReport -RootDir $rootDir -Stopwatch $sw -RemovedCount $removed
+    Write-UninstallReport -RootDir $rootDir -Stopwatch $sw -RemovedCount $removed -DryRun:$DryRun
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Magenta
-    Write-Host "  Uninstall complete -- $removed path(s) removed in $(Format-ElapsedTime $sw)" -ForegroundColor Magenta
-    Write-Host "========================================" -ForegroundColor Magenta
+    Write-Host "========================================" -ForegroundColor $bannerColor
+    if ($DryRun) {
+        Write-Host "  Dry run complete -- $removed path(s) WOULD be removed in $(Format-ElapsedTime $sw)" -ForegroundColor $bannerColor
+        Write-Host "  No files were deleted." -ForegroundColor DarkCyan
+    } else {
+        Write-Host "  Uninstall complete -- $removed path(s) removed in $(Format-ElapsedTime $sw)" -ForegroundColor $bannerColor
+    }
+    Write-Host "========================================" -ForegroundColor $bannerColor
     Write-Host ""
     return $removed
 }
