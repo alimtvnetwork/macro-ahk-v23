@@ -305,7 +305,7 @@ The `macro-looping.js` controller (via `standalone-scripts/macro-controller`) de
 
 **Version coupling:**
 
-- Extension v2.170.0+ requires AHK sidecar v21.x (macro-ahk-v23 branch)
+- Extension v2.170.0+ requires AHK sidecar v23.x (macro-ahk-v23 branch)
 - Mismatched versions log a warning but do not block core browser automation
 
 See also: `readme.md` §"Companion Repositories" for contributor setup instructions.

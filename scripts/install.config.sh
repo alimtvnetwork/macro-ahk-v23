@@ -26,8 +26,8 @@ SIBLING_DISCOVERY_ENABLED="${SIBLING_DISCOVERY_ENABLED:-0}"
 
 # Pattern for sibling repo names. The {N} placeholder is the version
 # number (2, 3, 4, …); {base} is the current repo's bare name (the part
-# after owner/). For this repo (macro-ahk-v21), siblings would be
-# macro-ahk-v22, macro-ahk-v23, … so the pattern is:
+# after owner/). For this repo (macro-ahk-v23), siblings would be
+# macro-ahk-v24, macro-ahk-v25, … so the pattern is:
 : "${SIBLING_NAME_PATTERN:=macro-ahk-v{N}}"
 
 # How many versions ahead to probe. Default per spec §4 = 20.
