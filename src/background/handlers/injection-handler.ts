@@ -138,16 +138,29 @@ export async function handleInjectScripts(
     }
 
     // ── Cache Gate: check for cached wrapped payload ──
+    // The cache is keyed by a singleton (`pipeline_payload`), so we MUST
+    // validate that the cached scripts match the requested scripts before
+    // serving the cached payload. Otherwise a previous successful run
+    // shadows a new request — including bad-syntax requests that would
+    // otherwise be reported as failures (see e2e syntax-error test).
     if (!isForceRun) {
         const cachedPayload = await time("cache_gate", () =>
             cacheGet<{ code: string; scriptMeta: Array<{ id: string; name: string }> }>(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY));
-        if (cachedPayload) {
+        const requestedIds = msg.scripts.map((s) => s.id).sort().join(",");
+        const cachedIds = cachedPayload?.scriptMeta.map((m) => m.id).sort().join(",") ?? "";
+        const cacheMatchesRequest = cachedPayload !== null && requestedIds === cachedIds;
+        if (cachedPayload && cacheMatchesRequest) {
             console.log("[injection] CACHE HIT — skipping Stages 0–3, using cached payload (%d chars, %d scripts) in %.1fms",
                 cachedPayload.code.length, cachedPayload.scriptMeta.length, timings["cache_gate"]);
             // Jump directly to Stage 2 (env prep) + Stage 4 (execute) with cached payload
             return await executeCachedPayload(msg.tabId, cachedPayload, pipelineStart, timings, time);
         }
-        console.log("[injection] CACHE MISS — proceeding through full pipeline (%.1fms)", timings["cache_gate"]);
+        if (cachedPayload && !cacheMatchesRequest) {
+            console.log("[injection] CACHE MISS — cached scriptIds [%s] do not match requested [%s], rebuilding",
+                cachedIds, requestedIds);
+        } else {
+            console.log("[injection] CACHE MISS — proceeding through full pipeline (%.1fms)", timings["cache_gate"]);
+        }
     }
 
     // ✅ 15.2: Read all projects ONCE, pass to all consumers
