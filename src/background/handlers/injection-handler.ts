@@ -135,6 +135,34 @@ function requestHasInlineSyntaxError(
     );
 }
 
+function collectInlineSyntaxFailures(
+    scripts: Array<ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>>,
+): InjectionResult[] {
+    const failures: InjectionResult[] = [];
+
+    for (const script of scripts) {
+        if (!isInlineInjectableRequest(script)) {
+            continue;
+        }
+
+        const syntaxError = detectSyntaxError(script.code);
+        if (syntaxError === null) {
+            continue;
+        }
+
+        const scriptName = script.name ?? script.id;
+        failures.push({
+            scriptId: script.id,
+            scriptName,
+            isSuccess: false,
+            errorMessage: `Script "${scriptName}" has a syntax error: ${syntaxError}`,
+            durationMs: 0,
+        });
+    }
+
+    return failures;
+}
+
 /* ------------------------------------------------------------------ */
 /*  INJECT_SCRIPTS                                                     */
 /* ------------------------------------------------------------------ */
@@ -200,7 +228,8 @@ export async function handleInjectScripts(
         console.log("[injection] FORCE RUN — pipeline cache cleared by user");
     }
 
-    const hasInlineSyntaxError = !isForceRun && requestHasInlineSyntaxError(msg.scripts);
+    const inlineSyntaxFailures = collectInlineSyntaxFailures(msg.scripts);
+    const hasInlineSyntaxError = !isForceRun && inlineSyntaxFailures.length > 0;
     if (hasInlineSyntaxError) {
         await cacheDelete(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY);
         console.log("[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared");
@@ -257,7 +286,11 @@ export async function handleInjectScripts(
     // Stage 1: Resolve
     const { prepared: preparedScripts, skipped: skippedScripts } = await time("stage1_resolve", () =>
         resolveInjectionRequestScripts(scriptsWithDeps));
-    const sorted = preparedScripts.map((entry) => entry.injectable);
+    const syntaxFailureIds = new Set(inlineSyntaxFailures.map((result) => result.scriptId));
+    const filteredPreparedScripts = preparedScripts.filter(
+        (entry) => !syntaxFailureIds.has(entry.injectable.id),
+    );
+    const sorted = filteredPreparedScripts.map((entry) => entry.injectable);
     console.log("[injection] 1/4 RESOLVE  — %d scripts resolved, %d skipped in %.1fms: [%s]",
         sorted.length,
         skippedScripts.length,
@@ -273,21 +306,22 @@ export async function handleInjectScripts(
         errorMessage: buildSkipMessage(s.reason, s.scriptName),
         durationMs: 0,
     }));
+    const preflightFailureResults = [...inlineSyntaxFailures, ...skipResults];
 
-    await mirrorSkippedResultsToTab(msg.tabId, skipResults);
+    await mirrorSkippedResultsToTab(msg.tabId, preflightFailureResults);
 
     if (sorted.length === 0) {
         const totalMs = Math.round((performance.now() - pipelineStart) * 10) / 10;
         console.log("[injection] ── PIPELINE END (empty) ── total=%.1fms breakdown=%s",
             totalMs, JSON.stringify(timings));
         void mirrorPipelineLogsToTab(msg.tabId, [
-            { msg: `[Marco] ── INJECTION PIPELINE (empty) ── 0 scripts resolved, ${skippedScripts.length} skipped, ${totalMs}ms`, level: "warn" },
-            ...skipResults.map((r) => ({
+            { msg: `[Marco] ── INJECTION PIPELINE (empty) ── 0 scripts resolved, ${preflightFailureResults.length} skipped/failed, ${totalMs}ms`, level: "warn" },
+            ...preflightFailureResults.map((r) => ({
                 msg: `[Marco]   ⏭ ${r.scriptName ?? r.scriptId} — ${r.errorMessage ?? r.skipReason ?? "skipped"}`,
                 level: "warn" as const,
             })),
         ], `⚠️ Marco Injection — 0 scripts (${totalMs}ms)`);
-        return { results: skipResults };
+        return { results: preflightFailureResults };
     }
 
     // ✅ 15.5: Parallelize independent stages 1.5, 2a, 2b
@@ -305,7 +339,7 @@ export async function handleInjectScripts(
     const scriptInjectStart = performance.now();
     const nsInjectStart = performance.now();
     const [execResults] = await time("stage3_4_5_parallel", () => Promise.all([
-        injectAllScripts(msg.tabId, preparedScripts).then(r => {
+        injectAllScripts(msg.tabId, filteredPreparedScripts).then(r => {
             timings["stage3_4_scripts"] = Math.round((performance.now() - scriptInjectStart) * 10) / 10;
             return r;
         }),
@@ -318,7 +352,7 @@ export async function handleInjectScripts(
     ]));
 
     const totalMs = Math.round((performance.now() - pipelineStart) * 10) / 10;
-    const results = [...skipResults, ...execResults];
+    const results = [...preflightFailureResults, ...execResults];
 
     const successCount = execResults.filter((r) => r.isSuccess).length;
     const failCount = execResults.length - successCount;
@@ -341,15 +375,15 @@ export async function handleInjectScripts(
         // ── Stage Summary sub-group ──
         { msg: `📊 Stage Summary (${totalMs}ms)`, level: "__group__" },
         { msg: `0/4 DEPS      ${scriptsWithDeps.length} scripts (${msg.scripts.length} raw + deps)`, level: "log" },
-        { msg: `1/4 RESOLVE   ${sorted.length} resolved, ${skippedScripts.length} skipped (${(timings["stage1_resolve"] ?? 0)}ms)`, level: "log" },
+        { msg: `1/4 RESOLVE   ${sorted.length} resolved, ${preflightFailureResults.length} skipped/failed (${(timings["stage1_resolve"] ?? 0)}ms)`, level: "log" },
         { msg: `2/4 SEED      bootstrap+relay+token (${(timings["stage1_5_2a_2b_parallel"] ?? 0)}ms)`, level: "log" },
         { msg: `3/4 BATCH     ${sorted.length} scripts combined (${(timings["stage3_4_scripts"] ?? 0)}ms)`, level: "log" },
-        { msg: `4/4 EXECUTE   ✅ ${successCount} succeeded, ${failCount} failed, ${skipResults.length} skipped`, level: successCount > 0 ? "log" : "warn" },
+        { msg: `4/4 EXECUTE   ✅ ${successCount} succeeded, ${failCount} failed, ${preflightFailureResults.length} skipped/failed`, level: successCount > 0 ? "log" : "warn" },
         { msg: `TOTAL ${totalMs}ms — scripts:${(timings["stage3_4_scripts"] ?? 0)}ms | ns:${(timings["stage5a_settings"] ?? 0)}ms+${(timings["stage5b_namespaces"] ?? 0)}ms`, level: "log" },
         { msg: "", level: "__groupEnd__" },
 
         // ── Per-Script Results sub-group ──
-        { msg: `📜 Per-Script Results (${execResults.length + skipResults.length})`, level: "__group__" },
+        { msg: `📜 Per-Script Results (${execResults.length + preflightFailureResults.length})`, level: "__group__" },
     ];
 
     for (const r of execResults) {
@@ -360,7 +394,7 @@ export async function handleInjectScripts(
             level: r.isSuccess ? "log" : "error",
         });
     }
-    for (const r of skipResults) {
+    for (const r of preflightFailureResults) {
         pipelineLines.push({
             msg: `⏭ ${r.scriptName ?? r.scriptId} — ${r.errorMessage ?? r.skipReason ?? "skipped"}`,
             level: "warn",
