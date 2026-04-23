@@ -27,8 +27,17 @@ param(
     [Alias('q')][switch]$quick,
     [Alias('u')][switch]$uninstall,
     [Alias('ri')][switch]$reinstall,
-    [switch]$strict
+    [Alias('y')][switch]$yes,
+    [switch]$strict,
+    [Parameter(ValueFromRemainingArguments = $true)]$ExtraArgs
 )
+
+# POSIX-style "--yes" support (PowerShell param() only matches single-dash)
+if ($ExtraArgs) {
+    foreach ($a in $ExtraArgs) {
+        if ($a -is [string] -and ($a -ieq '--yes' -or $a -ieq '--y')) { $yes = $true }
+    }
+}
 
 if ($quick) { $skippull = $true; $nosourcemap = $true }
 if ($rebuild) { $force = $true; $installonly = $true }
