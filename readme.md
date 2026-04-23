@@ -14,6 +14,9 @@
 [![Pull Requests](https://img.shields.io/github/issues-pr/alimtvnetwork/macro-ahk-v23?style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/pulls)
 [![Repo Size](https://img.shields.io/github/repo-size/alimtvnetwork/macro-ahk-v23?style=flat-square)](https://github.com/alimtvnetwork/macro-ahk-v23)
 
+<!-- Community -->
+<!-- (intentionally empty — see mem://constraints/no-static-mockup-badges; only live community badges with real data may be added back here) -->
+
 <!-- Code-quality -->
 [![Security Issues](https://img.shields.io/github/issues-search/alimtvnetwork/macro-ahk-v23?query=is%3Aissue%20label%3Asecurity&label=security&style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/issues?q=is%3Aissue+label%3Asecurity)
 [![Dependency PRs](https://img.shields.io/github/issues-pr-raw/alimtvnetwork/macro-ahk-v23?label=dependency%20PRs&style=flat-square&logo=dependabot)](https://github.com/alimtvnetwork/macro-ahk-v23/pulls?q=is%3Apr+label%3Adependencies)
