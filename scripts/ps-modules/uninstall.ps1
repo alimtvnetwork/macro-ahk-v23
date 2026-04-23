@@ -169,7 +169,7 @@ function Invoke-Uninstall {
     Write-Host ""
 
     # Reset collector for this run.
-    $script:UninstallReportEntries = New-Object System.Collections.Generic.List[object]
+    $script:UninstallReportEntries = New-Object System.Collections.ArrayList
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $removed = 0
