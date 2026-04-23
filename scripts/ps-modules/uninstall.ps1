@@ -122,12 +122,14 @@ function Write-UninstallReport {
     param(
         [string]$RootDir,
         [System.Diagnostics.Stopwatch]$Stopwatch,
-        [int]$RemovedCount
+        [int]$RemovedCount,
+        [switch]$DryRun
     )
-    $reportPath = Join-Path $RootDir "uninstall-report.json"
+    $reportFileName = if ($DryRun) { "uninstall-report.dry-run.json" } else { "uninstall-report.json" }
+    $reportPath = Join-Path $RootDir $reportFileName
     $entries = $script:UninstallReportEntries.ToArray()
 
-    $byStatus = @{ removed = 0; missing = 0; error = 0 }
+    $byStatus = @{ removed = 0; missing = 0; error = 0; would_remove = 0 }
     $totalBytes = [int64]0
     foreach ($e in $entries) {
         if ($byStatus.ContainsKey($e.status)) { $byStatus[$e.status]++ } else { $byStatus[$e.status] = 1 }
@@ -148,6 +150,7 @@ function Write-UninstallReport {
                 removed        = 0
                 missing        = 0
                 errors         = 0
+                wouldRemove    = 0
                 bytesReclaimed = [int64]0
             }
         }
@@ -157,6 +160,7 @@ function Write-UninstallReport {
             "removed" { $bucket.removed++; $bucket.bytesReclaimed += [int64]$e.sizeBytes }
             "missing" { $bucket.missing++ }
             "error"   { $bucket.errors++ }
+            "would_remove" { $bucket.wouldRemove++; $bucket.bytesReclaimed += [int64]$e.sizeBytes }
             default   { }
         }
     }
@@ -167,11 +171,14 @@ function Write-UninstallReport {
         schemaVersion   = 1
         project         = $script:ProjectName
         generatedAt     = (Get-Date).ToString("o")
+        mode            = if ($DryRun) { "report-only" } else { "destructive" }
+        dryRun          = [bool]$DryRun
         rootDir         = $RootDir
         extensionDir    = $script:ExtensionDir
         durationMs      = if ($Stopwatch) { [int64]$Stopwatch.ElapsedMilliseconds } else { 0 }
         totalAttempted  = $entries.Count
-        totalRemoved    = $RemovedCount
+        totalRemoved    = if ($DryRun) { 0 } else { $RemovedCount }
+        totalWouldRemove = if ($DryRun) { $RemovedCount } else { 0 }
         totalMissing    = $byStatus["missing"]
         totalErrors     = $byStatus["error"]
         bytesReclaimed  = $totalBytes
@@ -182,34 +189,56 @@ function Write-UninstallReport {
     try {
         $json = $report | ConvertTo-Json -Depth 6
         Set-Content -LiteralPath $reportPath -Value $json -Encoding UTF8 -ErrorAction Stop
-        Write-Host "  [report]  uninstall-report.json -> $reportPath" -ForegroundColor Cyan
-        Write-Host "            removed=$($report.totalRemoved)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+        $headerLabel = if ($DryRun) { "[dry-run]" } else { "[report] " }
+        Write-Host "  $headerLabel $reportFileName -> $reportPath" -ForegroundColor Cyan
+        if ($DryRun) {
+            Write-Host "            would_remove=$($report.totalWouldRemove)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+        } else {
+            Write-Host "            removed=$($report.totalRemoved)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+        }
 
         # Per-phase breakdown lines for at-a-glance inspection in the console.
         if ($phasesArray.Count -gt 0) {
             Write-Host "  [phases]  per-phase breakdown:" -ForegroundColor Cyan
             foreach ($p in $phasesArray) {
-                $line = "            {0,-20} attempted={1,-3} removed={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
-                    $p.phase, $p.totalAttempted, $p.removed, $p.missing, $p.errors, $p.bytesReclaimed
+                if ($DryRun) {
+                    $line = "            {0,-20} attempted={1,-3} would_remove={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
+                        $p.phase, $p.totalAttempted, $p.wouldRemove, $p.missing, $p.errors, $p.bytesReclaimed
+                } else {
+                    $line = "            {0,-20} attempted={1,-3} removed={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
+                        $p.phase, $p.totalAttempted, $p.removed, $p.missing, $p.errors, $p.bytesReclaimed
+                }
                 $color = if ($p.errors -gt 0) { "Yellow" } else { "DarkCyan" }
                 Write-Host $line -ForegroundColor $color
             }
         }
 
         # Compact one-line JSON summary mirrored to the console for quick scanning / log scraping.
-        $summary = [pscustomobject]@{
-            removed  = [int]$report.totalRemoved
-            missing  = [int]$report.totalMissing
-            errors   = [int]$report.totalErrors
-            bytes    = [int64]$totalBytes
-            phases   = $phasesArray.Count
+        if ($DryRun) {
+            $summary = [pscustomobject]@{
+                mode         = "report-only"
+                wouldRemove  = [int]$report.totalWouldRemove
+                missing      = [int]$report.totalMissing
+                errors       = [int]$report.totalErrors
+                bytes        = [int64]$totalBytes
+                phases       = $phasesArray.Count
+            }
+        } else {
+            $summary = [pscustomobject]@{
+                mode     = "destructive"
+                removed  = [int]$report.totalRemoved
+                missing  = [int]$report.totalMissing
+                errors   = [int]$report.totalErrors
+                bytes    = [int64]$totalBytes
+                phases   = $phasesArray.Count
+            }
         }
         $summaryJson = $summary | ConvertTo-Json -Compress
         Write-Host ""
-        Write-Host "  [summary] uninstall-report.json:" -ForegroundColor Cyan
+        Write-Host "  [summary] $reportFileName" -ForegroundColor Cyan
         Write-Host "            $summaryJson" -ForegroundColor Gray
     } catch {
-        Write-Host "  [WARN]    Failed to write uninstall-report.json: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  [WARN]    Failed to write ${reportFileName}: $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
