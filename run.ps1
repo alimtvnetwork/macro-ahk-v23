@@ -27,8 +27,17 @@ param(
     [Alias('q')][switch]$quick,
     [Alias('u')][switch]$uninstall,
     [Alias('ri')][switch]$reinstall,
-    [switch]$strict
+    [Alias('y')][switch]$yes,
+    [switch]$strict,
+    [Parameter(ValueFromRemainingArguments = $true)]$ExtraArgs
 )
+
+# POSIX-style "--yes" support (PowerShell param() only matches single-dash)
+if ($ExtraArgs) {
+    foreach ($a in $ExtraArgs) {
+        if ($a -is [string] -and ($a -ieq '--yes' -or $a -ieq '--y')) { $yes = $true }
+    }
+}
 
 if ($quick) { $skippull = $true; $nosourcemap = $true }
 if ($rebuild) { $force = $true; $installonly = $true }
@@ -167,6 +176,25 @@ if ($downloadchrome) { Download-ChromeForTesting; exit 0 }
 if ($help) { Show-Help; exit 0 }
 
 if ($uninstall -or $reinstall) {
+    if (-not $yes) {
+        $action = if ($reinstall) { "UNINSTALL + REINSTALL" } else { "UNINSTALL" }
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host "  CONFIRM: $action" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host "  This will remove dist/, node_modules, build caches, standalone-scripts" -ForegroundColor Gray
+        Write-Host "  dist/ + node_modules, generated metadata, and test artifacts." -ForegroundColor Gray
+        Write-Host "  Source files, .git, .lovable, .release, spec/, and scripts/ are preserved." -ForegroundColor Gray
+        if ($reinstall) {
+            Write-Host "  Then .\run.ps1 will be relaunched with no flags." -ForegroundColor Gray
+        }
+        Write-Host ""
+        $reply = Read-Host "  Proceed? Type 'y' or 'yes' to continue (anything else aborts)"
+        if ($reply -inotmatch '^(y|yes)$') {
+            Write-Host "  [abort] Uninstall cancelled by user." -ForegroundColor Red
+            exit 1
+        }
+    }
     Invoke-Uninstall | Out-Null
     if ($uninstall -and -not $reinstall) {
         $TotalStopwatch.Stop()
