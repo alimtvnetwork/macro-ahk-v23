@@ -287,15 +287,21 @@ test.describe('Script Injection', () => {
     // expected on a stub page where the macro globals (MacroController,
     // RiseupAsiaMacroExt, etc.) intentionally don't exist. The assertion
     // is about the *user's* injected script, not the extension's own
-    // verification log.
+    // verification log. Patterns are intentionally broad: console.error
+    // calls with %c style tokens get split across argument boundaries and
+    // 404s from blob: cleanup land here too. We want to surface only
+    // genuine errors raised by `e2e-clean-script`, which has none.
     const ignoredPatterns = [
       /macrocontroller/i,
       /riseupasiamacroext/i,
       /window\.marco/i,
-      /\[marco\]/i,
-      /post-injection verification/i,
+      /\bmarco\b/i,
+      /post-injection/i,
       /failed to load resource/i,
       /favicon/i,
+      /404/,
+      /\bblob:/i,
+      /color:#/i, // %c style tokens leak as standalone console args
     ];
     const isIgnored = (text: string) => ignoredPatterns.some((rx) => rx.test(text));
 
