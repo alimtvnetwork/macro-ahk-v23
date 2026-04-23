@@ -551,6 +551,40 @@ function detectSyntaxError(code: string): string | null {
     }
 }
 
+/**
+ * Splits a list of prepared scripts into the ones that parse cleanly and a
+ * ready-to-return failure list for the ones that do not. Centralizing the
+ * loop keeps `injectAllScripts` under the cognitive-complexity budget.
+ */
+type PreparedScript = { injectable: InjectableScript; configJson: string | null; themeJson: string | null; codeSource?: string };
+
+function partitionBySyntax(
+    scripts: PreparedScript[],
+    startTime: number,
+    projectId: string | undefined,
+): { good: PreparedScript[]; syntaxFailures: InjectionResult[] } {
+    const good: PreparedScript[] = [];
+    const syntaxFailures: InjectionResult[] = [];
+    for (const script of scripts) {
+        const syntaxError = detectSyntaxError(script.injectable.code);
+        if (syntaxError === null) {
+            good.push(script);
+            continue;
+        }
+        const errorMessage = `Script "${script.injectable.name ?? script.injectable.id}" has a syntax error: ${syntaxError}`;
+        console.error("[injection] 3/4 SYNTAX  — %s", errorMessage);
+        syntaxFailures.push({
+            scriptId: script.injectable.id,
+            scriptName: script.injectable.name,
+            isSuccess: false,
+            durationMs: Date.now() - startTime,
+            errorMessage,
+        });
+        logInjectionFailure(script.injectable, projectId, new SyntaxError(syntaxError)).catch(() => {});
+    }
+    return { good, syntaxFailures };
+}
+
 /** Injects one script into a tab and logs the result. */
 // eslint-disable-next-line max-lines-per-function
 async function injectSingleScript(
