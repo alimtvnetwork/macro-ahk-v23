@@ -116,6 +116,25 @@ function buildRequestFingerprint(
         .join("|");
 }
 
+function isInlineInjectableRequest(
+    value: ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>,
+): value is InjectableScript {
+    return typeof value === "object"
+        && value !== null
+        && typeof (value as InjectableScript).id === "string"
+        && typeof (value as InjectableScript).code === "string"
+        && typeof (value as InjectableScript).order === "number";
+}
+
+function requestHasInlineSyntaxError(
+    scripts: Array<ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>>,
+): boolean {
+    return scripts.some((script) =>
+        isInlineInjectableRequest(script)
+        && detectSyntaxError(script.code) !== null,
+    );
+}
+
 /* ------------------------------------------------------------------ */
 /*  INJECT_SCRIPTS                                                     */
 /* ------------------------------------------------------------------ */
@@ -181,13 +200,19 @@ export async function handleInjectScripts(
         console.log("[injection] FORCE RUN — pipeline cache cleared by user");
     }
 
+    const hasInlineSyntaxError = !isForceRun && requestHasInlineSyntaxError(msg.scripts);
+    if (hasInlineSyntaxError) {
+        await cacheDelete(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY);
+        console.log("[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared");
+    }
+
     // ── Cache Gate: check for cached wrapped payload ──
     // The cache is keyed by a singleton (`pipeline_payload`), so we MUST
     // validate that the cached scripts match the requested scripts before
     // serving the cached payload. Otherwise a previous successful run
     // shadows a new request — including bad-syntax requests that would
     // otherwise be reported as failures (see e2e syntax-error test).
-    if (!isForceRun) {
+    if (!isForceRun && !hasInlineSyntaxError) {
         const requestedFingerprint = buildRequestFingerprint(msg.scripts as Array<Partial<InjectableScript> & { path?: string }>);
         const cachedPayload = await time("cache_gate", () =>
             cacheGet<PipelineCachePayload>(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY));
