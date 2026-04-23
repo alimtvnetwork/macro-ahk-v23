@@ -146,6 +146,82 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.macro.build.json
 
   # ════════════════════════════════════════════════════════════
+  # Job 0c: ESLint Standalone Scripts — fast-fail lint guard
+  #
+  # Runs ESLint scoped to standalone-scripts/ (macro-controller,
+  # marco-sdk, xpath, payment-banner-hider) with --max-warnings=0
+  # so any new warning fails the build. Surfaces violations as
+  # inline `::error file=…,line=…,col=…::` GitHub annotations on
+  # the PR diff.
+  #
+  # Why a separate job (vs `setup`'s existing `pnpm run lint`):
+  #   - Runs in parallel with setup + typecheck — no waiting for
+  #     tests or installs of build deps to surface lint failures.
+  #   - Scoped to standalone-scripts/ only — quick (~5–8s after
+  #     install) and isolates the noise from React/UI lint output.
+  #   - --max-warnings=0 enforces zero-warnings policy
+  #     (mem://architecture/linting-policy).
+  #
+  # Listed in build-extension's needs: so a lint regression
+  # blocks merge even if other jobs pass.
+  # ════════════════════════════════════════════════════════════
+  lint-standalone:
+    name: Preflight · ESLint (Standalone Scripts)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            standalone-scripts/*/node_modules
+          key: ${{ runner.os }}-nm-lint-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nm-lint-
+
+      - name: Install dependencies
+        run: pnpm install --prefer-offline --no-frozen-lockfile
+
+      # Stylish format → human-readable in the Actions log.
+      # Compact format → piped to a one-liner that emits GitHub
+      # annotations so each violation shows up on the PR diff.
+      - name: ESLint · Standalone Scripts (errors + warnings)
+        run: npx eslint standalone-scripts --max-warnings=0 --format=stylish
+
+      - name: ESLint · Macro Controller domain-specific guards
+        run: pnpm run lint:macro
+
+  # ════════════════════════════════════════════════════════════
   # Job 1: Setup, Lint, Test
   # ════════════════════════════════════════════════════════════
   setup:
