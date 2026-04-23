@@ -6,23 +6,9 @@
 
 > **Browser automation for workspace management, credit monitoring, and AI-driven macro execution** — built as a Manifest V3 Chrome extension with a modular standalone script architecture.
 
-<!-- Build & Release -->
-[![CI](https://img.shields.io/github/actions/workflow/status/alimtvnetwork/macro-ahk-v23/ci.yml?branch=main&label=CI&logo=github&style=flat-square)](https://github.com/alimtvnetwork/macro-ahk-v23/actions/workflows/ci.yml)
+<!-- Build & Release --> [![CI](https://img.shields.io/github/actions/workflow/status/alimtvnetwork/macro-ahk-v23/ci.yml?branch=main&label=CI&logo=github&style=flat-square)](https://github.com/alimtvnetwork/macro-ahk-v23/actions/workflows/ci.yml) <!-- Stack & standards --> [![License](https://img.shields.io/github/license/alimtvnetwork/macro-ahk-v23?style=flat-square)](#license) <!-- Repo activity --> [![Issues](https://img.shields.io/github/issues/alimtvnetwork/macro-ahk-v23?style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/issues) [![Pull Requests](https://img.shields.io/github/issues-pr/alimtvnetwork/macro-ahk-v23?style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/pulls) [![Repo Size](https://img.shields.io/github/repo-size/alimtvnetwork/macro-ahk-v23?style=flat-square)](https://github.com/alimtvnetwork/macro-ahk-v23)
 
-<!-- Repo activity -->
-[![Issues](https://img.shields.io/github/issues/alimtvnetwork/macro-ahk-v23?style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/issues)
-[![Pull Requests](https://img.shields.io/github/issues-pr/alimtvnetwork/macro-ahk-v23?style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/pulls)
-[![Repo Size](https://img.shields.io/github/repo-size/alimtvnetwork/macro-ahk-v23?style=flat-square)](https://github.com/alimtvnetwork/macro-ahk-v23)
-
-<!-- Community -->
-<!-- (intentionally empty — see mem://constraints/no-static-mockup-badges; only live community badges with real data may be added back here) -->
-
-<!-- Code-quality -->
-[![Security Issues](https://img.shields.io/github/issues-search/alimtvnetwork/macro-ahk-v23?query=is%3Aissue%20label%3Asecurity&label=security&style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/issues?q=is%3Aissue+label%3Asecurity)
-[![Dependency PRs](https://img.shields.io/github/issues-pr-raw/alimtvnetwork/macro-ahk-v23?label=dependency%20PRs&style=flat-square&logo=dependabot)](https://github.com/alimtvnetwork/macro-ahk-v23/pulls?q=is%3Apr+label%3Adependencies)
-
-<!-- Stack & standards -->
-[![License](https://img.shields.io/github/license/alimtvnetwork/macro-ahk-v23?style=flat-square)](#license)
+<!-- Community --> <!-- (intentionally empty — see mem://constraints/no-static-mockup-badges; only live community badges with real data may be added back here) --> <!-- Code-quality --> [![Security Issues](https://img.shields.io/github/issues-search/alimtvnetwork/macro-ahk-v23?query=is%3Aissue%20label%3Asecurity&label=security&style=flat-square&logo=github)](https://github.com/alimtvnetwork/macro-ahk-v23/issues?q=is%3Aissue+label%3Asecurity) [![Dependency PRs](https://img.shields.io/github/issues-pr-raw/alimtvnetwork/macro-ahk-v23?label=dependency%20PRs&style=flat-square&logo=dependabot)](https://github.com/alimtvnetwork/macro-ahk-v23/pulls?q=is%3Apr+label%3Adependencies)
 
 <img src="docs/assets/marco-extension-hero.png" alt="Marco Chrome Extension — Projects view inside the options page" width="820" />
 
