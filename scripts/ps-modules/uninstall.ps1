@@ -252,10 +252,15 @@ function Write-UninstallReport {
     entry per attempted path (status: removed | missing | error).
 #>
 function Invoke-Uninstall {
+    param(
+        [switch]$DryRun
+    )
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Magenta
-    Write-Host "  $($script:ProjectName) -- UNINSTALL" -ForegroundColor Magenta
-    Write-Host "========================================" -ForegroundColor Magenta
+    $bannerSuffix = if ($DryRun) { " (REPORT-ONLY / DRY RUN)" } else { "" }
+    $bannerColor  = if ($DryRun) { "DarkCyan" } else { "Magenta" }
+    Write-Host "========================================" -ForegroundColor $bannerColor
+    Write-Host "  $($script:ProjectName) -- UNINSTALL$bannerSuffix" -ForegroundColor $bannerColor
+    Write-Host "========================================" -ForegroundColor $bannerColor
     Write-Host ""
 
     # Reset collector for this run.
@@ -275,7 +280,7 @@ function Invoke-Uninstall {
     try {
         foreach ($cp in $configuredPaths) {
             $abs = Join-Path $extDir $cp
-            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "cleanPaths") { $removed++ }
+            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "cleanPaths" -DryRun:$DryRun) { $removed++ }
         }
     } finally { Pop-Location }
 
@@ -286,7 +291,7 @@ function Invoke-Uninstall {
     try {
         foreach ($cp in $extraCaches) {
             $abs = Join-Path $extDir $cp
-            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "buildCaches") { $removed++ }
+            if (Remove-PathSafe -Path $abs -Label "$extDir\$cp" -Phase "buildCaches" -DryRun:$DryRun) { $removed++ }
         }
     } finally { Pop-Location }
 
@@ -298,12 +303,12 @@ function Invoke-Uninstall {
         foreach ($pkg in $packages) {
             foreach ($sub in @("dist", "node_modules", ".turbo", ".cache")) {
                 $target = Join-Path $pkg.FullName $sub
-                if (Remove-PathSafe -Path $target -Label "standalone-scripts\$($pkg.Name)\$sub" -Phase "standaloneScripts") { $removed++ }
+                if (Remove-PathSafe -Path $target -Label "standalone-scripts\$($pkg.Name)\$sub" -Phase "standaloneScripts" -DryRun:$DryRun) { $removed++ }
             }
         }
         $generated = Join-Path $standaloneRoot "_generated"
         if (Test-Path $generated) {
-            if (Remove-PathSafe -Path $generated -Label "standalone-scripts\_generated" -Phase "standaloneScripts") { $removed++ }
+            if (Remove-PathSafe -Path $generated -Label "standalone-scripts\_generated" -Phase "standaloneScripts" -DryRun:$DryRun) { $removed++ }
         }
     } else {
         Write-Host "  [skip]    no standalone-scripts/ folder" -ForegroundColor DarkGray
@@ -320,24 +325,33 @@ function Invoke-Uninstall {
         (Join-Path $rootDir "coverage")
     )
     foreach ($p in $auxPaths) {
-        if (Remove-PathSafe -Path $p -Label $p -Phase "auxArtifacts") { $removed++ }
+        if (Remove-PathSafe -Path $p -Label $p -Phase "auxArtifacts" -DryRun:$DryRun) { $removed++ }
     }
-    $removed += (Remove-GlobInDir -Dir $rootDir -Pattern "*.tsbuildinfo" -Label "tsbuildinfo" -Phase "auxArtifacts")
+    $removed += (Remove-GlobInDir -Dir $rootDir -Pattern "*.tsbuildinfo" -Label "tsbuildinfo" -Phase "auxArtifacts" -DryRun:$DryRun)
 
     # 5. Notice about the deployed Chrome extension
     Write-Host "[5/5] Browser-side cleanup notice..." -ForegroundColor Yellow
-    Write-Host "  [info]    Open chrome://extensions and remove any unpacked Marco copy manually." -ForegroundColor Cyan
+    if ($DryRun) {
+        Write-Host "  [dry-run] Would remind you to remove the unpacked Marco copy from chrome://extensions." -ForegroundColor DarkCyan
+    } else {
+        Write-Host "  [info]    Open chrome://extensions and remove any unpacked Marco copy manually." -ForegroundColor Cyan
+    }
     Write-Host "  [info]    Profiles + bookmarks are NOT touched by this script." -ForegroundColor Cyan
 
     $sw.Stop()
 
     # Emit the JSON report before printing the final banner.
-    Write-UninstallReport -RootDir $rootDir -Stopwatch $sw -RemovedCount $removed
+    Write-UninstallReport -RootDir $rootDir -Stopwatch $sw -RemovedCount $removed -DryRun:$DryRun
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Magenta
-    Write-Host "  Uninstall complete -- $removed path(s) removed in $(Format-ElapsedTime $sw)" -ForegroundColor Magenta
-    Write-Host "========================================" -ForegroundColor Magenta
+    Write-Host "========================================" -ForegroundColor $bannerColor
+    if ($DryRun) {
+        Write-Host "  Dry run complete -- $removed path(s) WOULD be removed in $(Format-ElapsedTime $sw)" -ForegroundColor $bannerColor
+        Write-Host "  No files were deleted." -ForegroundColor DarkCyan
+    } else {
+        Write-Host "  Uninstall complete -- $removed path(s) removed in $(Format-ElapsedTime $sw)" -ForegroundColor $bannerColor
+    }
+    Write-Host "========================================" -ForegroundColor $bannerColor
     Write-Host ""
     return $removed
 }
