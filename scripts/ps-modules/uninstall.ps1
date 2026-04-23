@@ -118,7 +118,7 @@ function Write-UninstallReport {
         [int]$RemovedCount
     )
     $reportPath = Join-Path $RootDir "uninstall-report.json"
-    $entries = @($script:UninstallReportEntries)
+    $entries = $script:UninstallReportEntries.ToArray()
 
     $byStatus = @{ removed = 0; missing = 0; error = 0 }
     $totalBytes = [int64]0
