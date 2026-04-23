@@ -70,6 +70,7 @@ $requiredModules = @(
     "standalone-build.ps1",
     "extension-build.ps1",
     "watch.ps1",
+    "uninstall.ps1",
     "help.ps1"
 )
 
