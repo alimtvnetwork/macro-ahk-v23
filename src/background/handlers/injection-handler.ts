@@ -522,6 +522,25 @@ async function injectAllScripts(
     return results;
 }
 
+/**
+ * Pre-flight syntax validation. Returns the SyntaxError message if user code
+ * is unparsable, otherwise null. We must do this *before* handing the script
+ * to chrome.userScripts.execute() / chrome.scripting.executeScript() because
+ * those APIs swallow parse failures silently and report success — see
+ * spec/22-app-issues for the regression that broke the bad-syntax e2e test.
+ */
+function detectSyntaxError(code: string): string | null {
+    try {
+        new Function(code);
+        return null;
+    } catch (err) {
+        if (err instanceof SyntaxError) {
+            return err.message;
+        }
+        return null;
+    }
+}
+
 /** Injects one script into a tab and logs the result. */
 // eslint-disable-next-line max-lines-per-function
 async function injectSingleScript(
@@ -534,6 +553,15 @@ async function injectSingleScript(
     const startTime = Date.now();
     const configJson = resolvedConfigJson;
     const projectId = getActiveProjectId() ?? undefined;
+
+    // Pre-flight: catch syntax errors before injection swallows them.
+    const syntaxError = detectSyntaxError(script.code);
+    if (syntaxError !== null) {
+        const errorMessage = `Script "${script.name}" has a syntax error: ${syntaxError}`;
+        console.error("[injection] 3/4 SYNTAX  — %s", errorMessage);
+        logInjectionFailure(script, projectId, new SyntaxError(syntaxError)).catch(() => {});
+        return buildErrorResult(script.id, startTime, new SyntaxError(syntaxError));
+    }
 
     // ── CSS injection (before JS) — see spec/21-app/02-features/devtools-and-injection/standalone-script-assets.md §6 ──
     if (script.assets?.css) {
