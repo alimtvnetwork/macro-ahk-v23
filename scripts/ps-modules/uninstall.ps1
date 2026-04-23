@@ -72,7 +72,8 @@ function Remove-PathSafe {
     param(
         [string]$Path,
         [string]$Label,
-        [string]$Phase = "unknown"
+        [string]$Phase = "unknown",
+        [switch]$DryRun
     )
     if ([string]::IsNullOrWhiteSpace($Path)) {
         Add-UninstallReportEntry -Phase $Phase -Label $Label -Path $Path -Status "missing"
@@ -83,6 +84,11 @@ function Remove-PathSafe {
         return $false
     }
     $size = Get-PathSizeBytes -Path $Path
+    if ($DryRun) {
+        Write-Host "  [dry-run] would remove $Label  ($size bytes)" -ForegroundColor DarkCyan
+        Add-UninstallReportEntry -Phase $Phase -Label $Label -Path $Path -Status "would_remove" -SizeBytes $size
+        return $true
+    }
     try {
         Remove-Item -Recurse -Force -LiteralPath $Path -ErrorAction Stop
         Write-Host "  [removed] $Label" -ForegroundColor DarkGreen
@@ -101,12 +107,13 @@ function Remove-GlobInDir {
         [string]$Dir,
         [string]$Pattern,
         [string]$Label,
-        [string]$Phase = "unknown"
+        [string]$Phase = "unknown",
+        [switch]$DryRun
     )
     if ([string]::IsNullOrWhiteSpace($Dir) -or -not (Test-Path -LiteralPath $Dir)) { return 0 }
     $count = 0
     Get-ChildItem -LiteralPath $Dir -Filter $Pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
-        if (Remove-PathSafe -Path $_.FullName -Label "$Label -> $($_.Name)" -Phase $Phase) { $count++ }
+        if (Remove-PathSafe -Path $_.FullName -Label "$Label -> $($_.Name)" -Phase $Phase -DryRun:$DryRun) { $count++ }
     }
     return $count
 }
