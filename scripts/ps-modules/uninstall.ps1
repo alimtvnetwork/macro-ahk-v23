@@ -127,6 +127,35 @@ function Write-UninstallReport {
         $totalBytes += [int64]$e.sizeBytes
     }
 
+    # Per-phase aggregation: count + size by status, preserving first-seen phase order
+    # so the JSON renders phases in the order Invoke-Uninstall actually executed them.
+    $phaseOrder = New-Object System.Collections.ArrayList
+    $phaseMap   = @{}
+    foreach ($e in $entries) {
+        $phaseKey = if ([string]::IsNullOrWhiteSpace($e.phase)) { "unknown" } else { $e.phase }
+        if (-not $phaseMap.ContainsKey($phaseKey)) {
+            [void]$phaseOrder.Add($phaseKey)
+            $phaseMap[$phaseKey] = [pscustomobject]@{
+                phase          = $phaseKey
+                totalAttempted = 0
+                removed        = 0
+                missing        = 0
+                errors         = 0
+                bytesReclaimed = [int64]0
+            }
+        }
+        $bucket = $phaseMap[$phaseKey]
+        $bucket.totalAttempted++
+        switch ($e.status) {
+            "removed" { $bucket.removed++; $bucket.bytesReclaimed += [int64]$e.sizeBytes }
+            "missing" { $bucket.missing++ }
+            "error"   { $bucket.errors++ }
+            default   { }
+        }
+    }
+    $phasesArray = @()
+    foreach ($k in $phaseOrder) { $phasesArray += $phaseMap[$k] }
+
     $report = [pscustomobject]@{
         schemaVersion   = 1
         project         = $script:ProjectName
@@ -139,6 +168,7 @@ function Write-UninstallReport {
         totalMissing    = $byStatus["missing"]
         totalErrors     = $byStatus["error"]
         bytesReclaimed  = $totalBytes
+        phases          = $phasesArray
         entries         = $entries
     }
 
@@ -148,12 +178,24 @@ function Write-UninstallReport {
         Write-Host "  [report]  uninstall-report.json -> $reportPath" -ForegroundColor Cyan
         Write-Host "            removed=$($report.totalRemoved)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
 
+        # Per-phase breakdown lines for at-a-glance inspection in the console.
+        if ($phasesArray.Count -gt 0) {
+            Write-Host "  [phases]  per-phase breakdown:" -ForegroundColor Cyan
+            foreach ($p in $phasesArray) {
+                $line = "            {0,-20} attempted={1,-3} removed={2,-3} missing={3,-3} errors={4,-3} bytes={5}" -f `
+                    $p.phase, $p.totalAttempted, $p.removed, $p.missing, $p.errors, $p.bytesReclaimed
+                $color = if ($p.errors -gt 0) { "Yellow" } else { "DarkCyan" }
+                Write-Host $line -ForegroundColor $color
+            }
+        }
+
         # Compact one-line JSON summary mirrored to the console for quick scanning / log scraping.
         $summary = [pscustomobject]@{
             removed  = [int]$report.totalRemoved
             missing  = [int]$report.totalMissing
             errors   = [int]$report.totalErrors
             bytes    = [int64]$totalBytes
+            phases   = $phasesArray.Count
         }
         $summaryJson = $summary | ConvertTo-Json -Compress
         Write-Host ""
