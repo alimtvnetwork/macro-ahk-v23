@@ -37,6 +37,8 @@ function Show-Help {
     Write-Host "  -k,  -kill         Kill the target browser before deploy for cold start"
     Write-Host "  -nsm,-nosourcemap  Skip sourcemap generation for faster builds"
     Write-Host "  -q,  -quick        Quick mode -- skip pull + no sourcemaps (-p + -nsm)"
+    Write-Host "  -u,  -uninstall    Remove dist/, node_modules, caches & test artifacts (no rebuild)"
+    Write-Host "  -ri, -reinstall    Run uninstall, then re-launch .\run.ps1 with no flags"
     Write-Host ""
     Write-Host "EXAMPLES:" -ForegroundColor Yellow
     Write-Host "  .\run.ps1                         # Full build"
@@ -49,6 +51,8 @@ function Show-Help {
     Write-Host "  .\run.ps1 -w                       # Watch mode"
     Write-Host "  .\run.ps1 -i                       # Install dependencies only"
     Write-Host "  .\run.ps1 -pf                      # Preflight check only"
+    Write-Host "  .\run.ps1 -u                       # Uninstall: clean dist, node_modules, caches"
+    Write-Host "  .\run.ps1 -ri                      # Reinstall: uninstall, then re-run .\run.ps1"
     Write-Host ""
     Write-Host "PROFILES:" -ForegroundColor Yellow
     $profiles = Get-AvailableProfiles

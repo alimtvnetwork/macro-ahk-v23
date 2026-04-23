@@ -25,6 +25,8 @@ param(
     [Alias('k')][switch]$killbrowser,
     [Alias('nsm')][switch]$nosourcemap,
     [Alias('q')][switch]$quick,
+    [Alias('u')][switch]$uninstall,
+    [Alias('ri')][switch]$reinstall,
     [switch]$strict
 )
 
@@ -68,6 +70,7 @@ $requiredModules = @(
     "standalone-build.ps1",
     "extension-build.ps1",
     "watch.ps1",
+    "uninstall.ps1",
     "help.ps1"
 )
 
@@ -158,10 +161,26 @@ $TotalStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $StepTimes = @{}
 
 # ============================================================================
-# EARLY EXITS: -dl, -h
+# EARLY EXITS: -dl, -h, -uninstall, -reinstall
 # ============================================================================
 if ($downloadchrome) { Download-ChromeForTesting; exit 0 }
 if ($help) { Show-Help; exit 0 }
+
+if ($uninstall -or $reinstall) {
+    Invoke-Uninstall | Out-Null
+    if ($uninstall -and -not $reinstall) {
+        $TotalStopwatch.Stop()
+        Write-Host "  Total time: $(Format-ElapsedTime $TotalStopwatch)" -ForegroundColor DarkGray
+        exit 0
+    }
+    # -reinstall: re-launch run.ps1 with NO flags (clean default build)
+    Write-Host ""
+    Write-Host "[reinstall] Relaunching .\run.ps1 with no flags..." -ForegroundColor Cyan
+    Write-Host ""
+    $selfPath = $MyInvocation.MyCommand.Path
+    & $selfPath
+    exit $LASTEXITCODE
+}
 
 # ============================================================================
 # BANNER
