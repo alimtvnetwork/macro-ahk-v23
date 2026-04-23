@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- untyped extension message types */
-import { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
