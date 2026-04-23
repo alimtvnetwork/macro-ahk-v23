@@ -57,7 +57,7 @@ function Add-UninstallReportEntry {
     )
     $resolved = $Path
     try { if ($Path) { $resolved = [System.IO.Path]::GetFullPath($Path) } } catch { $resolved = $Path }
-    $script:UninstallReportEntries.Add([pscustomobject]@{
+    [void]$script:UninstallReportEntries.Add([pscustomobject]@{
         phase        = $Phase
         label        = $Label
         path         = $resolved
@@ -65,7 +65,7 @@ function Add-UninstallReportEntry {
         sizeBytes    = $SizeBytes
         errorMessage = $ErrorMessage
         timestamp    = (Get-Date).ToString("o")
-    }) | Out-Null
+    })
 }
 
 function Remove-PathSafe {
