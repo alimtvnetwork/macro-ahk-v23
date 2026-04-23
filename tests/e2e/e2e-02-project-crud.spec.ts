@@ -75,19 +75,25 @@ test.describe('E2E-02 — Project CRUD Lifecycle', () => {
     // ProjectDetailView renders the name as a click-to-edit <h2>. We must
     // click it to mount the underlying <Input placeholder="Project name">
     // — otherwise getByPlaceholder will time out.
-    await options.getByRole('heading', { name: 'Test Automation' }).click();
+    const heading = options.getByRole('heading', { name: 'Test Automation' });
+    await expect(heading).toBeVisible({ timeout: 10000 });
+    await heading.click();
 
     const nameInput = options.getByPlaceholder(/project name/i);
+    await expect(nameInput).toBeVisible({ timeout: 5000 });
     await nameInput.clear();
     await nameInput.fill('Test Automation v2');
 
     // Press Enter to commit edit, then click the "Save project" icon button
     // (rendered only when isDirty=true). aria-label was added so it's
-    // discoverable by getByRole.
+    // discoverable by getByRole. IconButtonWithTooltip is now a plain
+    // forwardRef'd <button>, so getByRole picks it up directly.
     await nameInput.press('Enter');
-    await options.getByRole('button', { name: /save project/i }).click();
+    const saveBtn = options.getByRole('button', { name: /save project/i });
+    await expect(saveBtn).toBeVisible({ timeout: 5000 });
+    await saveBtn.click();
 
-    await expect(options.getByText('Test Automation v2').first()).toBeVisible();
+    await expect(options.getByText('Test Automation v2').first()).toBeVisible({ timeout: 10000 });
 
     await context.close();
   });
@@ -106,13 +112,20 @@ test.describe('E2E-02 — Project CRUD Lifecycle', () => {
 
     // ProjectHeader's delete trigger is an icon-only button. The aria-label
     // ("Delete project") was added on IconButtonWithTooltip so role queries
-    // can find it without relying on visible text.
-    await options.getByRole('button', { name: /delete project/i }).click();
+    // can find it without relying on visible text. The button is now a
+    // plain forwardRef'd <button>, so AlertDialogTrigger asChild can attach
+    // its handler directly (the previous <span><button/></span> wrapper
+    // broke asChild and the dialog never opened — this test timed out).
+    const deleteTrigger = options.getByRole('button', { name: /delete project/i });
+    await expect(deleteTrigger).toBeVisible({ timeout: 10000 });
+    await deleteTrigger.click();
 
     // Confirmation dialog uses an AlertDialogAction labeled "Delete".
-    await options.getByRole('button', { name: /^delete$/i }).click();
+    const confirmBtn = options.getByRole('button', { name: /^delete$/i });
+    await expect(confirmBtn).toBeVisible({ timeout: 5000 });
+    await confirmBtn.click();
 
-    await expect(options.getByText('Delete Me')).not.toBeVisible();
+    await expect(options.getByText('Delete Me')).not.toBeVisible({ timeout: 10000 });
 
     await context.close();
   });
