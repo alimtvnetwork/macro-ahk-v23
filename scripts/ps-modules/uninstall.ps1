@@ -30,7 +30,7 @@
 
 # Module-scope collector for the JSON report. Reset at the start of each
 # Invoke-Uninstall call so re-runs do not accumulate stale entries.
-$script:UninstallReportEntries = New-Object System.Collections.Generic.List[object]
+$script:UninstallReportEntries = New-Object System.Collections.ArrayList
 
 function Get-PathSizeBytes {
     param([string]$Path)
