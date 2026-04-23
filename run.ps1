@@ -25,6 +25,8 @@ param(
     [Alias('k')][switch]$killbrowser,
     [Alias('nsm')][switch]$nosourcemap,
     [Alias('q')][switch]$quick,
+    [Alias('u')][switch]$uninstall,
+    [Alias('ri')][switch]$reinstall,
     [switch]$strict
 )
 
