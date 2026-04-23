@@ -345,21 +345,35 @@ export function ProjectDetailView({ project, allProjects, availableScripts, avai
 /*  CSS3 Tooltip wrapper                                               */
 /* ------------------------------------------------------------------ */
 
-function IconButtonWithTooltip({
-  tooltip,
-  children,
-  ...buttonProps
-}: {
-  tooltip: string;
-  children: React.ReactNode;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+/**
+ * Icon button with CSS tooltip. Uses forwardRef so Radix primitives (e.g.
+ * AlertDialogTrigger asChild) can attach handlers + refs directly to the
+ * underlying <button>. Earlier versions wrapped the button in a <span>,
+ * which broke `asChild` because Radix attached its onClick to the span,
+ * not the button — the click target inside the button never opened the
+ * dialog. tests/e2e/e2e-02-project-crud.spec.ts (delete project) timed
+ * out for exactly this reason.
+ */
+const IconButtonWithTooltip = React.forwardRef<
+  HTMLButtonElement,
+  {
+    tooltip: string;
+    children: React.ReactNode;
+  } & React.ButtonHTMLAttributes<HTMLButtonElement>
+>(function IconButtonWithTooltip({ tooltip, children, className, ...buttonProps }, ref) {
   return (
-    <span className="css-tooltip-wrapper">
-      <button aria-label={tooltip} title={tooltip} {...buttonProps}>{children}</button>
-      <span className="css-tooltip">{tooltip}</span>
-    </span>
+    <button
+      ref={ref}
+      aria-label={tooltip}
+      title={tooltip}
+      data-tooltip={tooltip}
+      className={`css-tooltip-button ${className ?? ""}`.trim()}
+      {...buttonProps}
+    >
+      {children}
+    </button>
   );
-}
+});
 
 /* ------------------------------------------------------------------ */
 /*  Project Header                                                     */
