@@ -21,7 +21,7 @@ existing repository. Example pattern:
 
 | Previous repo | New repo |
 |---------------|----------|
-| `macro-ahk-v21` | `macro-ahk-v22` |
+| `macro-ahk-v22` | `macro-ahk-v23` |
 | `acme-tool-v3` | `acme-tool-v4` |
 | `marco-ext-v9` | `marco-ext-v10` |
 
@@ -33,7 +33,7 @@ heading). This spec defines a **generic shell-based renamer** that does
 the rewrite in one command.
 
 > **Important scope clarification (from the requirement author):**
-> - Only the **bare repo name** is rewritten (e.g. `macro-ahk-v21` → `macro-ahk-v22`).
+> - Only the **bare repo name** is rewritten (e.g. `macro-ahk-v22` → `macro-ahk-v23`).
 > - **URLs are NOT rewritten** in v1. Any string containing `http://`,
 >   `https://`, `git@`, or `ssh://` directly before/around the repo name
 >   must be skipped. (URLs may be added in a later opt-in flag — see
@@ -167,21 +167,21 @@ the standard "first 8 KB contains a NUL byte" heuristic and skip them.
 ╔══════════════════════════════════════════════════╗
 ║   REPO RENAME — DRY RUN (no files changed)      ║
 ╠══════════════════════════════════════════════════╣
-║  From: macro-ahk-v21                             ║
-║  To:   macro-ahk-v22                             ║
+║  From: macro-ahk-v22                             ║
+║  To:   macro-ahk-v23                             ║
 ║  Source: auto-detected from git remote           ║
 ╚══════════════════════════════════════════════════╝
 
 readme.md:14
-  - # macro-ahk-v21
-  + # macro-ahk-v22
+  - # macro-ahk-v22
+  + # macro-ahk-v23
 
 package.json:3
-  - "name": "macro-ahk-v21",
-  + "name": "macro-ahk-v22",
+  - "name": "macro-ahk-v22",
+  + "name": "macro-ahk-v23",
 
 … (URL-safety) skipped 3 matches inside URLs:
-  readme.md:42  https://github.com/alimtvnetwork/macro-ahk-v21
+  readme.md:42  https://github.com/alimtvnetwork/macro-ahk-v22
   …
 
 Summary:
@@ -274,10 +274,10 @@ The Python helper is **internal** — users only ever invoke
 
 | # | Case | Required behavior |
 |---|------|-------------------|
-| 1 | Repo name appears as a substring of a longer token (e.g. `macro-ahk-v210` when renaming `macro-ahk-v21`) | Match must be **whole token**: the byte before the match must not be `[A-Za-z0-9_-]` AND the byte after must not be `[A-Za-z0-9_-]`. |
+| 1 | Repo name appears as a substring of a longer token (e.g. `macro-ahk-v210` when renaming `macro-ahk-v22`) | Match must be **whole token**: the byte before the match must not be `[A-Za-z0-9_-]` AND the byte after must not be `[A-Za-z0-9_-]`. |
 | 2 | Same line contains both a URL match (skip) and a non-URL match (rewrite) | Each match evaluated independently; only the URL match is skipped. |
 | 3 | New name appears in a URL but old name does not | No-op. Do not rewrite. |
-| 4 | Repo name in CHANGELOG.md heading like `## [v21]` | Only matches that contain the full slug (`macro-ahk-v21`) are touched. Bare `v21` headings are left alone. |
+| 4 | Repo name in CHANGELOG.md heading like `## [v21]` | Only matches that contain the full slug (`macro-ahk-v22`) are touched. Bare `v21` headings are left alone. |
 | 5 | Operator is on `-v1` repo | Auto-derivation fails with a clear error. Operator must pass `--from` explicitly. |
 | 6 | `git remote get-url origin` fails (no remote) | Hard error. Must pass `--from` and `--to` explicitly. |
 | 7 | `OLD_REPO_NAME == NEW_REPO_NAME` | Hard error: "from and to are identical". |
@@ -291,11 +291,11 @@ The Python helper is **internal** — users only ever invoke
 
 | ID | Criterion |
 |----|-----------|
-| AC-RR-001 | Running `scripts/repo-rename.sh` with no args in a repo whose remote is `…/macro-ahk-v22` shows a dry-run with `From: macro-ahk-v21` / `To: macro-ahk-v22`. |
+| AC-RR-001 | Running `scripts/repo-rename.sh` with no args in a repo whose remote is `…/macro-ahk-v23` shows a dry-run with `From: macro-ahk-v22` / `To: macro-ahk-v23`. |
 | AC-RR-002 | Running with no args in a repo whose remote is `…/some-tool-v1` exits non-zero with a clear "cannot derive previous version" error. |
-| AC-RR-003 | URL strings (`https://github.com/org/macro-ahk-v21`, `git@github.com:org/macro-ahk-v21.git`) are reported as URL skips and never rewritten. |
-| AC-RR-004 | A line containing both `macro-ahk-v21` (bare) and `https://github.com/org/macro-ahk-v21` is partially rewritten — only the bare token changes. |
-| AC-RR-005 | `macro-ahk-v210` is **not** matched when renaming `macro-ahk-v21` (whole-token rule). |
+| AC-RR-003 | URL strings (`https://github.com/org/macro-ahk-v22`, `git@github.com:org/macro-ahk-v22.git`) are reported as URL skips and never rewritten. |
+| AC-RR-004 | A line containing both `macro-ahk-v22` (bare) and `https://github.com/org/macro-ahk-v22` is partially rewritten — only the bare token changes. |
+| AC-RR-005 | `macro-ahk-v210` is **not** matched when renaming `macro-ahk-v22` (whole-token rule). |
 | AC-RR-006 | Binary files, lockfiles, files under `.git/`, `.release/`, `skipped/`, `node_modules/`, `dist/`, `build/` are skipped. |
 | AC-RR-007 | `--apply` produces an audit log under `.repo-rename/<UTC>.log` with one line per change and one line per URL skip. |
 | AC-RR-008 | Re-running `--apply` on an already-renamed repo is a no-op (zero matches, exit 0). |
@@ -310,7 +310,7 @@ The Python helper is **internal** — users only ever invoke
 |------|----------|
 | `--allow-urls` | Bypass the URL-safety rule and rewrite repo names inside URLs as well. |
 | `--update-remote` | After rewrite, run `git remote set-url origin <new-url>` (requires confirmation). |
-| `--commit` | Stage and commit the rewrite as a single conventional commit (`chore: rename macro-ahk-v21 → macro-ahk-v22`). |
+| `--commit` | Stage and commit the rewrite as a single conventional commit (`chore: rename macro-ahk-v22 → macro-ahk-v23`). |
 | `--from-major <N> --to-major <M>` | Bulk version bump for repos that don't follow `-v<N>`. |
 | GitHub Action wrapper | `actions/repo-rename@v1` calling the same script under the hood. |
 

@@ -39,10 +39,10 @@ fi
 #
 # Examples:
 #   # Release-page one-liner (URL-pinned):
-#   curl -fsSL https://github.com/alimtvnetwork/macro-ahk-v21/releases/download/v2.158.0/install.sh | bash
+#   curl -fsSL https://github.com/alimtvnetwork/macro-ahk-v23/releases/download/v2.158.0/install.sh | bash
 #
 #   # From main (latest channel):
-#   curl -fsSL https://raw.githubusercontent.com/alimtvnetwork/macro-ahk-v21/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/alimtvnetwork/macro-ahk-v23/main/scripts/install.sh | bash
 #
 #   # Explicit override:
 #   ./install.sh --version v2.150.0
@@ -50,7 +50,7 @@ fi
 
 set -euo pipefail
 
-REPO="alimtvnetwork/macro-ahk-v21"
+REPO="alimtvnetwork/macro-ahk-v23"
 VERSION_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'
 TMP_DIR=""
 URL_PINNED=0
