@@ -10,6 +10,8 @@
 
 import type { MacroControllerConfig, MacroThemeRoot, PromptEntry } from './types';
 
+declare global {
+
 interface XPathUtilsAPI {
   version: string;
   setLogger: (info: (fn: string, msg: string) => void, sub: (fn: string, msg: string) => void, warn: (fn: string, msg: string) => void) => void;
@@ -144,7 +146,7 @@ interface MarcoSDK {
   };
 }
 
-declare global {
+// (declare global block opened at top of file)
   interface MacroControllerFacade {
     getInstance?: () => unknown;
     hasInstance?: () => boolean;
