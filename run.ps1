@@ -195,19 +195,60 @@ if ($uninstall -or $reinstall) {
             exit 1
         }
     }
+    # ----- PHASE 1/2: UNINSTALL -----
+    if ($reinstall) {
+        Write-Host ""
+        Write-Host "########################################" -ForegroundColor Magenta
+        Write-Host "#  REINSTALL  ::  PHASE 1/2  ->  UNINSTALL" -ForegroundColor Magenta
+        Write-Host "########################################" -ForegroundColor Magenta
+    }
+    $phase1Sw = [System.Diagnostics.Stopwatch]::StartNew()
     Invoke-Uninstall | Out-Null
+    $phase1Sw.Stop()
+
     if ($uninstall -and -not $reinstall) {
         $TotalStopwatch.Stop()
         Write-Host "  Total time: $(Format-ElapsedTime $TotalStopwatch)" -ForegroundColor DarkGray
         exit 0
     }
-    # -reinstall: re-launch run.ps1 with NO flags (clean default build)
+
+    # ----- PHASE 2/2: FRESH BUILD via .\run.ps1 (no flags) -----
     Write-Host ""
-    Write-Host "[reinstall] Relaunching .\run.ps1 with no flags..." -ForegroundColor Cyan
+    Write-Host "########################################" -ForegroundColor Cyan
+    Write-Host "#  REINSTALL  ::  PHASE 1/2 COMPLETE" -ForegroundColor Cyan
+    Write-Host "#    duration : $(Format-ElapsedTime $phase1Sw)" -ForegroundColor DarkCyan
+    Write-Host "#  Handing off to PHASE 2/2  ->  .\run.ps1 (no flags)" -ForegroundColor Cyan
+    Write-Host "########################################" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "  [reinstall] Phase 2 plan:" -ForegroundColor Cyan
+    Write-Host "    1. Git pull         (latest sources)" -ForegroundColor Gray
+    Write-Host "    2. Prerequisites    (node + pnpm)"     -ForegroundColor Gray
+    Write-Host "    3. Build            (deps + standalone + extension)" -ForegroundColor Gray
+    Write-Host "    4. Deploy           (skipped without -d)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  [reinstall] Launching child run.ps1 in 1s..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 1
+
     $selfPath = $MyInvocation.MyCommand.Path
+    $phase2Sw = [System.Diagnostics.Stopwatch]::StartNew()
     & $selfPath
-    exit $LASTEXITCODE
+    $childExit = $LASTEXITCODE
+    $phase2Sw.Stop()
+
+    Write-Host ""
+    Write-Host "########################################" -ForegroundColor Magenta
+    Write-Host "#  REINSTALL  ::  COMPLETE" -ForegroundColor Magenta
+    Write-Host "#    Phase 1/2 (uninstall)  : $(Format-ElapsedTime $phase1Sw)" -ForegroundColor DarkMagenta
+    Write-Host "#    Phase 2/2 (build)      : $(Format-ElapsedTime $phase2Sw)" -ForegroundColor DarkMagenta
+    if ($childExit -eq 0) {
+        Write-Host "#    Status                 : OK (exit 0)" -ForegroundColor Green
+    } else {
+        Write-Host "#    Status                 : FAIL (exit $childExit)" -ForegroundColor Red
+    }
+    Write-Host "########################################" -ForegroundColor Magenta
+    Write-Host ""
+    exit $childExit
+}
 }
 
 # ============================================================================
