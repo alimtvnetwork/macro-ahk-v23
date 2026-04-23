@@ -469,24 +469,12 @@ async function injectAllScripts(
     // Pre-flight syntax validation: scripts that fail to parse must be
     // reported as failures, NOT slipped into the batch where userScripts
     // .execute() would silently swallow the parse error and mark them OK.
-    const goodScripts: typeof orderedScripts = [];
-    for (const script of orderedScripts) {
-        const syntaxError = detectSyntaxError(script.injectable.code);
-        if (syntaxError !== null) {
-            const errorMessage = `Script "${script.injectable.name ?? script.injectable.id}" has a syntax error: ${syntaxError}`;
-            console.error("[injection] 3/4 SYNTAX  — %s", errorMessage);
-            results.push({
-                scriptId: script.injectable.id,
-                scriptName: script.injectable.name,
-                isSuccess: false,
-                durationMs: Date.now() - startTime,
-                errorMessage,
-            });
-            logInjectionFailure(script.injectable, projectId, new SyntaxError(syntaxError)).catch(() => {});
-            continue;
-        }
-        goodScripts.push(script);
-    }
+    const { good: goodScripts, syntaxFailures } = partitionBySyntax(
+        orderedScripts,
+        startTime,
+        projectId,
+    );
+    results.push(...syntaxFailures);
 
     // No CSS dependencies in the chain — safe to batch in resolved order.
     if (goodScripts.length > 0) {
