@@ -251,7 +251,7 @@ export function showSettingsModal(): void {
     try {
       await saveSettingsOverrides(next);
       log('[Settings] saved: ' + JSON.stringify(next), 'success');
-      showToast('⚙️ Settings saved', 3000);
+      showToast('⚙️ Settings saved', 'success');
       hideSettingsModal();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -266,7 +266,7 @@ export function showSettingsModal(): void {
     rerender();
     try {
       await clearSettingsOverrides();
-      showToast('↺ Overrides cleared — using JSON config', 3000);
+      showToast('↺ Overrides cleared — using JSON config', 'info');
       hideSettingsModal();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

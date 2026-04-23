@@ -39,11 +39,11 @@ export function actionRemixManual(ctx: RemixActionContext): void {
 /** "Remix Next" — resolve next name + submit immediately. */
 export async function actionRemixNext(ctx: RemixActionContext): Promise<void> {
   if (!ctx.projectId || !ctx.workspaceId) {
-    showToast('Remix Next unavailable — missing project or workspace id', 3000);
+    showToast('Remix Next unavailable — missing project or workspace id', 'warn');
     return;
   }
   const cfg = getRemixConfig();
-  showToast('🔀 Resolving next name…', 2000);
+  showToast('🔀 Resolving next name…', 'info');
   try {
     const existing = await fetchWorkspaceProjectNames(ctx.workspaceId);
     const { name, collisionsResolved } = resolveNextName(ctx.currentProjectName, existing, {
@@ -52,7 +52,7 @@ export async function actionRemixNext(ctx: RemixActionContext): Promise<void> {
     });
     log('[RemixNext] resolved "' + ctx.currentProjectName + '" → "' + name + '"'
       + (collisionsResolved > 0 ? ' (+' + collisionsResolved + ' collision skips)' : ''), 'info');
-    showToast('🔀 Remixing → "' + name + '"…', 3000);
+    showToast('🔀 Remixing → "' + name + '"…', 'info');
     const result = await submitRemix({
       projectId: ctx.projectId,
       workspaceId: ctx.workspaceId,
@@ -60,14 +60,14 @@ export async function actionRemixNext(ctx: RemixActionContext): Promise<void> {
       includeHistory: cfg.defaultIncludeHistory,
       includeCustomKnowledge: cfg.defaultIncludeCustomKnowledge,
     });
-    showToast('✅ Remixed → "' + name + '"', 4000);
+    showToast('✅ Remixed → "' + name + '"', 'success');
     if (result.redirectUrl) {
       window.open(result.redirectUrl, '_blank', 'noopener');
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     logError('RemixNext', 'Remix Next failed for "' + ctx.currentProjectName + '": ' + msg);
-    showToast('❌ Remix Next failed: ' + msg, 5000);
+    showToast('❌ Remix Next failed: ' + msg, 'error');
   }
 }
 
@@ -155,7 +155,7 @@ export function buildHeaderRemixSplitButton(getCtx: () => RemixActionContext | n
   main.onclick = function (e: Event): void {
     e.stopPropagation();
     const ctx = getCtx();
-    if (!ctx) { showToast('Remix unavailable — project/workspace not detected', 3000); return; }
+    if (!ctx) { showToast('Remix unavailable — project/workspace not detected', 'warn'); return; }
     actionRemixManual(ctx);
   };
 
@@ -168,7 +168,7 @@ export function buildHeaderRemixSplitButton(getCtx: () => RemixActionContext | n
   arrow.onclick = function (e: Event): void {
     e.stopPropagation();
     const ctx = getCtx();
-    if (!ctx) { showToast('Remix unavailable — project/workspace not detected', 3000); return; }
+    if (!ctx) { showToast('Remix unavailable — project/workspace not detected', 'warn'); return; }
     showHeaderRemixDropdown(arrow, ctx);
   };
 
