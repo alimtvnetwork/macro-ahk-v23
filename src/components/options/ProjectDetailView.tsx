@@ -355,7 +355,7 @@ function IconButtonWithTooltip({
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <span className="css-tooltip-wrapper">
-      <button {...buttonProps}>{children}</button>
+      <button aria-label={tooltip} title={tooltip} {...buttonProps}>{children}</button>
       <span className="css-tooltip">{tooltip}</span>
     </span>
   );
