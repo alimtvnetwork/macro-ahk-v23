@@ -176,6 +176,25 @@ if ($downloadchrome) { Download-ChromeForTesting; exit 0 }
 if ($help) { Show-Help; exit 0 }
 
 if ($uninstall -or $reinstall) {
+    if (-not $yes) {
+        $action = if ($reinstall) { "UNINSTALL + REINSTALL" } else { "UNINSTALL" }
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host "  CONFIRM: $action" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host "  This will remove dist/, node_modules, build caches, standalone-scripts" -ForegroundColor Gray
+        Write-Host "  dist/ + node_modules, generated metadata, and test artifacts." -ForegroundColor Gray
+        Write-Host "  Source files, .git, .lovable, .release, spec/, and scripts/ are preserved." -ForegroundColor Gray
+        if ($reinstall) {
+            Write-Host "  Then .\run.ps1 will be relaunched with no flags." -ForegroundColor Gray
+        }
+        Write-Host ""
+        $reply = Read-Host "  Proceed? Type 'y' or 'yes' to continue (anything else aborts)"
+        if ($reply -inotmatch '^(y|yes)$') {
+            Write-Host "  [abort] Uninstall cancelled by user." -ForegroundColor Red
+            exit 1
+        }
+    }
     Invoke-Uninstall | Out-Null
     if ($uninstall -and -not $reinstall) {
         $TotalStopwatch.Stop()
