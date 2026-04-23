@@ -66,6 +66,86 @@ jobs:
         run: node scripts/report-spec-links-ci.mjs
 
   # ════════════════════════════════════════════════════════════
+  # Job 0b: Typecheck Standalone Scripts — fast-fail TS guard
+  #
+  # Runs `tsc --noEmit` against every standalone-script tsconfig
+  # in a single job. Catches TS2304/TS2345/etc errors in seconds
+  # — long before the heavier build-* jobs would surface them
+  # via `pnpm build:macro-controller` (which also runs LESS,
+  # templates, prompts, and vite — masking the type error noise
+  # behind 60+ seconds of unrelated work).
+  #
+  # Caches both pnpm store and node_modules so cached runs install
+  # in ~10s. Lists this job in build-extension's `needs:` so a
+  # type error blocks merges even if downstream builds are re-run.
+  #
+  # Why one job, not four: each tsc invocation is ~3–8s. Spinning
+  # up four runners would burn more time on container startup +
+  # install than the actual checks. Keep them serial in one job.
+  # ════════════════════════════════════════════════════════════
+  typecheck-standalone:
+    name: Preflight · Typecheck (Standalone Scripts)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            standalone-scripts/*/node_modules
+          key: ${{ runner.os }}-nm-typecheck-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nm-typecheck-
+
+      - name: Install dependencies
+        run: pnpm install --prefer-offline --no-frozen-lockfile
+
+      # Compile each standalone-script tsconfig with --noEmit. Any
+      # TS2304 (missing global), TS2345 (bad arg type), etc fails
+      # the job with inline annotations on the offending line.
+      - name: Typecheck · Marco SDK
+        run: npx tsc --noEmit -p tsconfig.sdk.json
+
+      - name: Typecheck · XPath
+        run: npx tsc --noEmit -p tsconfig.xpath.json
+
+      - name: Typecheck · Payment Banner Hider
+        run: npx tsc --noEmit -p tsconfig.payment-banner-hider.json
+
+      - name: Typecheck · Macro Controller
+        run: npx tsc --noEmit -p tsconfig.macro.build.json
+
+  # ════════════════════════════════════════════════════════════
   # Job 1: Setup, Lint, Test
   # ════════════════════════════════════════════════════════════
   setup:
