@@ -466,20 +466,42 @@ async function injectAllScripts(
         return results;
     }
 
+    // Pre-flight syntax validation: scripts that fail to parse must be
+    // reported as failures, NOT slipped into the batch where userScripts
+    // .execute() would silently swallow the parse error and mark them OK.
+    const goodScripts: typeof orderedScripts = [];
+    for (const script of orderedScripts) {
+        const syntaxError = detectSyntaxError(script.injectable.code);
+        if (syntaxError !== null) {
+            const errorMessage = `Script "${script.injectable.name ?? script.injectable.id}" has a syntax error: ${syntaxError}`;
+            console.error("[injection] 3/4 SYNTAX  — %s", errorMessage);
+            results.push({
+                scriptId: script.injectable.id,
+                scriptName: script.injectable.name,
+                isSuccess: false,
+                durationMs: Date.now() - startTime,
+                errorMessage,
+            });
+            logInjectionFailure(script.injectable, projectId, new SyntaxError(syntaxError)).catch(() => {});
+            continue;
+        }
+        goodScripts.push(script);
+    }
+
     // No CSS dependencies in the chain — safe to batch in resolved order.
-    if (orderedScripts.length > 0) {
+    if (goodScripts.length > 0) {
         try {
             const wrappedParts: string[] = [];
             const scriptMeta: Array<{ id: string; name: string }> = [];
 
-            for (const script of orderedScripts) {
+            for (const script of goodScripts) {
                 const wrapped = wrapWithIsolation(script.injectable, script.configJson, script.themeJson);
                 wrappedParts.push(wrapped);
                 scriptMeta.push({ id: script.injectable.id, name: script.injectable.name ?? script.injectable.id });
             }
 
             const combinedCode = wrappedParts.join("\n;\n");
-            console.log("[injection] 3/4 BATCH    — %d scripts combined (%d chars)", orderedScripts.length, combinedCode.length);
+            console.log("[injection] 3/4 BATCH    — %d scripts combined (%d chars)", goodScripts.length, combinedCode.length);
 
             // Store wrapped payload in IndexedDB cache for future runs
             void cacheSet(PIPELINE_CACHE_CATEGORY, { code: combinedCode, scriptMeta }, PIPELINE_CACHE_KEY)
@@ -499,7 +521,7 @@ async function injectAllScripts(
                     domTarget: execResult.domTarget,
                 });
                 // Fire-and-forget: logging is non-critical, don't block injection
-                const matchedScript = orderedScripts.find(s => s.injectable.id === meta.id)!;
+                const matchedScript = goodScripts.find(s => s.injectable.id === meta.id)!;
                 logInjectionSuccess(
                     matchedScript.injectable,
                     projectId,
@@ -512,7 +534,7 @@ async function injectAllScripts(
         } catch (batchError) {
             // Fallback to sequential on batch failure
             logCaughtError(BgLogTag.INJECTION, "Batch injection failed, falling back to sequential", batchError);
-            for (const script of orderedScripts) {
+            for (const script of goodScripts) {
                 const result = await injectSingleScript(tabId, script.injectable, script.configJson, script.themeJson, script.codeSource);
                 results.push(result);
             }
