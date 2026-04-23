@@ -150,7 +150,7 @@ export function hideRemixModal(): void {
 // eslint-disable-next-line max-lines-per-function -- modal lifecycle: render + attach + submit + key handler all need shared state closure
 export function showRemixModal(opts: RemixModalOpts): void {
   if (!opts.projectId || !opts.workspaceId) {
-    showToast('Remix unavailable — missing project or workspace id', 3000);
+    showToast('Remix unavailable — missing project or workspace id', 'warn');
     return;
   }
   const bd = ensureBackdrop();
@@ -202,7 +202,7 @@ export function showRemixModal(opts: RemixModalOpts): void {
         includeCustomKnowledge: knowInput.checked,
       });
       log('[Remix] ✅ created "' + projectName + '" id=' + (result.newProjectId || '?'), 'success');
-      showToast('🔀 Remixed → "' + projectName + '"', 4000);
+      showToast('🔀 Remixed → "' + projectName + '"', 'success');
       hideRemixModal();
       if (result.redirectUrl) {
         window.open(result.redirectUrl, '_blank', 'noopener');
