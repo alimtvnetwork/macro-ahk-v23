@@ -147,6 +147,18 @@ function Write-UninstallReport {
         Set-Content -LiteralPath $reportPath -Value $json -Encoding UTF8 -ErrorAction Stop
         Write-Host "  [report]  uninstall-report.json -> $reportPath" -ForegroundColor Cyan
         Write-Host "            removed=$($report.totalRemoved)  missing=$($report.totalMissing)  errors=$($report.totalErrors)  bytes=$totalBytes" -ForegroundColor DarkCyan
+
+        # Compact one-line JSON summary mirrored to the console for quick scanning / log scraping.
+        $summary = [pscustomobject]@{
+            removed  = [int]$report.totalRemoved
+            missing  = [int]$report.totalMissing
+            errors   = [int]$report.totalErrors
+            bytes    = [int64]$totalBytes
+        }
+        $summaryJson = $summary | ConvertTo-Json -Compress
+        Write-Host ""
+        Write-Host "  [summary] uninstall-report.json:" -ForegroundColor Cyan
+        Write-Host "            $summaryJson" -ForegroundColor Gray
     } catch {
         Write-Host "  [WARN]    Failed to write uninstall-report.json: $($_.Exception.Message)" -ForegroundColor Yellow
     }
