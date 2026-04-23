@@ -72,6 +72,50 @@ const _llmGuideCache = new Map<string, string>();
 const PIPELINE_CACHE_KEY = "pipeline_payload" as const;
 const PIPELINE_CACHE_CATEGORY: CacheCategory = "scripts";
 
+type PipelineCacheMeta = {
+    id: string;
+    name: string;
+    order: number;
+    codeHash: string;
+};
+
+type PipelineCachePayload = {
+    code: string;
+    scriptMeta: PipelineCacheMeta[];
+    requestFingerprint: string;
+};
+
+function hashScriptCode(code: string): string {
+    let hash = 0;
+    for (let i = 0; i < code.length; i += 1) {
+        hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+    }
+    return hash.toString(16).padStart(8, "0");
+}
+
+function buildRequestFingerprint(
+    scripts: Array<Partial<InjectableScript> & { path?: string }>,
+): string {
+    return [...scripts]
+        .sort((a, b) => {
+            const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            const aKey = getScriptIdentity(a) ?? "";
+            const bKey = getScriptIdentity(b) ?? "";
+            return aKey.localeCompare(bKey);
+        })
+        .map((script) => {
+            const scriptKey = getScriptIdentity(script) ?? "unknown";
+            return [
+            scriptKey,
+            script.name ?? scriptKey,
+            String(script.order ?? 0),
+            typeof script.code === "string" ? hashScriptCode(script.code) : "store",
+        ].join(":");
+        })
+        .join("|");
+}
+
 /* ------------------------------------------------------------------ */
 /*  INJECT_SCRIPTS                                                     */
 /* ------------------------------------------------------------------ */
@@ -144,11 +188,13 @@ export async function handleInjectScripts(
     // shadows a new request — including bad-syntax requests that would
     // otherwise be reported as failures (see e2e syntax-error test).
     if (!isForceRun) {
+        const requestedFingerprint = buildRequestFingerprint(msg.scripts as Array<Partial<InjectableScript> & { path?: string }>);
         const cachedPayload = await time("cache_gate", () =>
-            cacheGet<{ code: string; scriptMeta: Array<{ id: string; name: string }> }>(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY));
-        const requestedIds = msg.scripts.map((s) => s.id).sort().join(",");
-        const cachedIds = cachedPayload?.scriptMeta.map((m) => m.id).sort().join(",") ?? "";
-        const cacheMatchesRequest = cachedPayload !== null && requestedIds === cachedIds;
+            cacheGet<PipelineCachePayload>(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY));
+        const cachedFingerprint = cachedPayload?.requestFingerprint ?? "";
+        const cacheMatchesRequest = cachedPayload !== null
+            && cachedFingerprint.length > 0
+            && requestedFingerprint === cachedFingerprint;
         if (cachedPayload && cacheMatchesRequest) {
             console.log("[injection] CACHE HIT — skipping Stages 0–3, using cached payload (%d chars, %d scripts) in %.1fms",
                 cachedPayload.code.length, cachedPayload.scriptMeta.length, timings["cache_gate"]);
@@ -156,8 +202,9 @@ export async function handleInjectScripts(
             return await executeCachedPayload(msg.tabId, cachedPayload, pipelineStart, timings, time);
         }
         if (cachedPayload && !cacheMatchesRequest) {
-            console.log("[injection] CACHE MISS — cached scriptIds [%s] do not match requested [%s], rebuilding",
-                cachedIds, requestedIds);
+            await cacheDelete(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY);
+            console.log("[injection] CACHE MISS — cached request fingerprint [%s] does not match requested [%s], rebuilding",
+                cachedFingerprint || "missing", requestedFingerprint || "empty");
         } else {
             console.log("[injection] CACHE MISS — proceeding through full pipeline (%.1fms)", timings["cache_gate"]);
         }
@@ -354,7 +401,7 @@ export async function handleInjectScripts(
 // eslint-disable-next-line max-lines-per-function
 async function executeCachedPayload(
     tabId: number,
-    cached: { code: string; scriptMeta: Array<{ id: string; name: string }> },
+    cached: PipelineCachePayload,
     pipelineStart: number,
     timings: Record<string, number>,
     time: <T>(label: string, fn: () => Promise<T>) => Promise<T>,
@@ -493,19 +540,27 @@ async function injectAllScripts(
     if (goodScripts.length > 0) {
         try {
             const wrappedParts: string[] = [];
-            const scriptMeta: Array<{ id: string; name: string }> = [];
+            const scriptMeta: PipelineCacheMeta[] = [];
 
             for (const script of goodScripts) {
                 const wrapped = wrapWithIsolation(script.injectable, script.configJson, script.themeJson);
                 wrappedParts.push(wrapped);
-                scriptMeta.push({ id: script.injectable.id, name: script.injectable.name ?? script.injectable.id });
+                scriptMeta.push({
+                    id: script.injectable.id,
+                    name: script.injectable.name ?? script.injectable.id,
+                    order: script.injectable.order ?? 0,
+                    codeHash: hashScriptCode(script.injectable.code),
+                });
             }
 
             const combinedCode = wrappedParts.join("\n;\n");
+            const requestFingerprint = buildRequestFingerprint(
+                goodScripts.map((script) => script.injectable),
+            );
             console.log("[injection] 3/4 BATCH    — %d scripts combined (%d chars)", goodScripts.length, combinedCode.length);
 
             // Store wrapped payload in IndexedDB cache for future runs
-            void cacheSet(PIPELINE_CACHE_CATEGORY, { code: combinedCode, scriptMeta }, PIPELINE_CACHE_KEY)
+            void cacheSet(PIPELINE_CACHE_CATEGORY, { code: combinedCode, scriptMeta, requestFingerprint }, PIPELINE_CACHE_KEY)
                 .then(() => console.log("[injection] CACHE STORE — payload cached for version=%s, size=%d bytes", EXTENSION_VERSION, combinedCode.length))
                 .catch(() => { /* best-effort cache write */ });
 
