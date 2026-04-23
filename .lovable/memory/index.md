@@ -1,0 +1,94 @@
+# Memory: index.md
+Updated: just now
+
+# Project Memory
+
+## Core
+- **Timezone**: Asia/Kuala_Lumpur (Malaysia) for time-sensitive data.
+- **Read-only folders**: Never modify `skipped/` or `.release/` folders.
+- **No Supabase**: Supabase is strictly forbidden (auth, tokens, SDKs, localStorage).
+- **Versioning**: Ensure unified version across manifest, constants.ts, and scripts.
+- **Suggestions & Planning**: Roadmap tracked in `plan.md`. Suggestions in `.lovable/memory/suggestions/`.
+- **Next Commands Backlog**: Persistent task list at `mem://workflow/13-next-commands` — read at end of every session and surface remaining `[ ]` items in closing summary. Tick `[x]` on completion, append new requests.
+- **Linting**: Zero ESLint warnings/errors; modular architecture.
+- **Code Red Logging**: All file/path errors MUST include exact path, missing item, and reasoning.
+- **Namespace Logging**: Use `RiseupAsiaMacroExt.Logger.error()`, never bare `log()` for errors.
+- **Dark Theme Enforced**: Dark-only theme. No light mode or theme toggles.
+- **CI Notifications**: Never send CI build notifications.
+- **No-Retry Policy**: Bans unauthorized recursive retry or exponential backoff. Use sequential fail-fast.
+- **No Explicit Unknown**: No `unknown` except in `CaughtError`. Function params must use designed types.
+- **Error Handling**: Defensive property access (`?.`, `??`) required. CQ14 (braces), CQ15 (newlines).
+- **Auth Contract**: Use single-path `getBearerToken()` contract. No legacy auth methods.
+- **Installer Contract**: All install scripts MUST conform to `spec/14-update/01-generic-installer-behavior.md` — strict on `--version`/release-URL, latest→main fallback otherwise, opt-in parallel sibling-repo discovery.
+
+## Memories
+- [Timezone](mem://localization/timezone) — Asia/Kuala_Lumpur for local timezone formatting
+- [Versioning policy](mem://workflow/versioning-policy) — Unified versioning across manifest, constants.ts, scripts
+- [Planning roadmap](mem://workflow/planning-roadmap) — plan.md as authoritative prioritized backlog
+- [Next commands backlog](mem://workflow/13-next-commands) — Persistent prioritized task list, queryable via "what's next"/"remaining tasks", auto-surfaced in session closing summary
+- [Suggestions convention](mem://workflow/suggestions-convention) — Single file tracking in .lovable/memory/suggestions/
+- [File naming convention](mem://workflow/file-naming-convention) — Numeric naming for workflow memory files
+- [Spec organization](mem://architecture/spec-organization) — Numeric hierarchy for specs (00 to 08)
+- [Task execution pattern](mem://workflow/task-execution-pattern) — Root Cause Analysis -> prioritized task list -> explicit 'next'
+- [Extension startup UX](mem://features/extension-startup-ux) — Toast implemented as standalone DOM element with zero external dependencies
+- [Workspace members panel](mem://features/macro-controller/workspace-members-panel) — Right-click "Show Members" floating panel, top-20 sorted by credits used, all 8 fields, 5min cache
+- [Project remix dropdown](mem://features/macro-controller/project-remix-dropdown) — Header split-button + right-click "Remix"/"Remix Next" with auto-V-suffix, collision pre-check, configurable defaults
+- [Settings modal](mem://features/macro-controller/settings-modal) — ⚙️ cog in panel header; edits expiryGracePeriodDays + refillWarningThresholdDays; chrome.storage.local override layered over JSON config
+- [Prompt management](mem://features/prompt-management) — Dual-cache (JsonCopy/HtmlCopy) in IndexedDB, manual-load
+- [Readiness reports](mem://workflow/readiness-reports) — Reliability and Failure-Chance Report before implementation
+- [Linting policy](mem://architecture/linting-policy) — Zero ESLint warnings/errors, strict No Explicit Unknown
+- [Constant naming](mem://architecture/constant-naming-convention) — SCREAMING_SNAKE_CASE prefixes (ID_, SEL_, ATTR_, CSS_)
+- [UI framework selection](mem://architecture/ui-framework-selection) — React rejected; modular UIManager architecture used
+- [Diagram visual standards](mem://style/diagram-visual-standards) — PascalCase, dark XMind aesthetic, top-down
+- [Script injection lifecycle](mem://architecture/script-injection-lifecycle) — 7-stage lifecycle via background service worker MAIN world
+- [Data storage layers](mem://architecture/data-storage-layers) — 4-tier storage (SQLite, IndexedDB, localStorage, chrome.storage.local)
+- [Auth bridge service](mem://architecture/auth-bridge-service) — Bearer token TTL-aware management via localStorage
+- [Generic installer contract](mem://constraints/generic-installer-contract) — Repo-agnostic installer behavior; strict mode vs discovery mode vs sibling-repo probing — share spec/14-update/01-generic-installer-behavior.md with any AI
+- [Credit monitoring](mem://architecture/credit-monitoring-system) — retry-once-on-refresh consolidated policy
+- [Dynamic script loading](mem://architecture/dynamic-script-loading) — RiseupAsiaMacroExt.require API, audited via SQLite
+- [Extension lifecycle](mem://architecture/extension-lifecycle) — 6 phases from Install to User Interaction, audited via SQLite
+- [Type safety standards](mem://architecture/type-safety-standards) — declare global {}, unknown cast for objects
+- [Selector standards](mem://ui/selector-standards) — data- attributes instead of fragile CSS selectors
+- [Message relay system](mem://architecture/message-relay-system) — 3-tier extension-to-page communication
+- [Token retrieval strategy](mem://auth/token-retrieval-strategy) — Zero-network auth resolution waterfall
+- [Platform adapter pattern](mem://architecture/platform-adapter-pattern) — Abstract environment-specific APIs
+- [Documentation standards](mem://workflow/documentation-standards) — readme.md, CHANGELOG.md, CONTRIBUTING.md
+- [Instruction-driven seeding](mem://architecture/instruction-driven-seeding) — declarative manifest source via instruction.ts
+- [Extension error management](mem://architecture/extension-error-management) — Multi-layered UI error reporting, BootFailureBanner
+- [Real-time error sync](mem://architecture/real-time-error-synchronization) — ERROR_COUNT_CHANGED message broadcast across contexts
+- [Injection cache](mem://architecture/injection-cache-management) — build-aware cache invalidation and canonical script prioritization
+- [Self-healing script storage](mem://architecture/self-healing-script-storage) — builtin-script-guard.ts two-stage recovery
+- [Automated version validation](mem://workflow/automated-version-validation) — pre-build checks for manifest, version sync, typescript
+- [Build artifact preservation](mem://architecture/build-artifact-preservation) — emptyOutDir: false to protect instruction metadata
+- [Vite build environment](mem://constraints/vite-build-environment) — static top-level imports for Node.js built-ins in hooks
+- [Injection visibility](mem://architecture/injection-visibility-system) — console.groupCollapsed with status icons
+- [Log diagnostics export](mem://features/log-diagnostics-export) — human-readable ZIP bundle format
+- [Logging data contract](mem://architecture/logging-data-contract) — Handle SQLite PascalCase vs frontend camelCase keys
+- [Session logging system](mem://architecture/session-logging-system) — SQLite + OPFS (7-day prune) logs
+- [View transition patterns](mem://ui/view-transition-patterns) — direction-aware slide-and-fade CSS keyframes
+- [Animation strategy](mem://style/animation-strategy) — Tailwind + standard CSS keyframes, zero external libraries
+- [Skipped folders policy](mem://constraints/skipped-folders) — Read-only archives for skipped/ and .release/
+- [Sourcemap strategy](mem://architecture/sourcemap-strategy) — Dev = inline; Prod = none (enforced at build and release)
+- [Stack trace filtering](mem://preferences/stack-trace-filtering) — Filter chunk references from reports
+- [Error logging requirements](mem://standards/error-logging-requirements.md) — Exact path, missing item, reasoning required for HARD errors
+- [File path error logging](mem://constraints/file-path-error-logging-code-red.md) — CODE RED: exact path, missing item, reason
+- [Dark-only theme](mem://preferences/dark-only-theme) — Enforced dark mode with 40% overlay opacity
+- [CSS injection sentinel](mem://features/css-injection-sentinel) — Emergency inline dark styles via #marco-css-sentinel
+- [No CI notifications](mem://constraints/no-ci-notifications) — Never send emails/notifications for CI build events
+- [Namespace database creation](mem://features/namespace-database-creation) — Dot-separated namespaces, max 25, System.* reserved
+- [Error logging via namespace logger](mem://standards/error-logging-via-namespace-logger.md) — Use Logger.error(), no swallowed errors
+- [Unknown usage policy](mem://standards/unknown-usage-policy) — Restrictions on `unknown`, fully typed functions
+- [Formatting and logic](mem://standards/formatting-and-logic) — CQ14 braces, boolean extraction, defensive property access
+- [Config defaults extraction](mem://architecture/config-defaults-extraction) — Extract default configurations into named constants
+- [Injection context awareness](mem://architecture/injection-context-awareness) — RiseupAsiaMacroExt SDK available in MAIN world only
+- [Deployment diagnostics](mem://architecture/deployment-diagnostics) — browser-deploy.ps1 active profile check
+- [Data type definitions](mem://architecture/data-type-definitions) — SqlValue, JsonValue (no undefined), CaughtError
+- [Token readiness gate](mem://auth/token-readiness-gate) — Unified 10s budget, sync fast pre-seed phase
+- [Author identity](mem://branding/author-identity) — Riseup Asia LLC, specific Stack Overflow URL
+- [No-retry policy](mem://constraints/no-retry-policy) — Sequential fail-fast, bans recursive retry and exponential backoff
+- [Unified auth contract](mem://auth/unified-auth-contract) — getBearerToken() used exclusively; legacy functions removed
+- [No Supabase](mem://constraints/no-supabase) — Supabase entirely forbidden in codebase
+- [Workspace status pill + hover card](mem://features/macro-controller/workspace-status-pill-and-hovercard) — Lifecycle pill, rich floating panel, canceled-credit override chokepoint (v2.214.0)
+- [Screen-scoped variables rule](mem://architecture/screen-scoped-variables-rule) — Per-screen XPath/selector configs must never collide; HomepageDashboardVariables is the first instance
+- [Deferred workstreams](mem://preferences/deferred-workstreams) — React tests, manual Chrome testing, P Store, cross-project sync — DO NOT auto-recommend
+- [Session 2026-04-23 — TS Migration V2 cleared](mem://workflow/14-session-2026-04-23-ts-migration-v2-cleared) — v2.225.0; Phases 02/03/04/05 complete; suite 445/445 passing
