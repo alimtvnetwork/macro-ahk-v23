@@ -68,18 +68,24 @@ test.describe('E2E-02 — Project CRUD Lifecycle', () => {
     await options.getByPlaceholder(/project name/i).fill('Test Automation');
     await options.getByRole('button', { name: /^create$/i }).click();
 
-    // Edit → rename → save. The detail view may use either an explicit
-    // "Save" button or auto-save on blur; handle both to stay resilient.
+    // Navigate to project detail. The project card uses the same text as
+    // the H2 inside the detail view, so use .first() to disambiguate.
     await options.getByText('Test Automation').first().click();
+
+    // ProjectDetailView renders the name as a click-to-edit <h2>. We must
+    // click it to mount the underlying <Input placeholder="Project name">
+    // — otherwise getByPlaceholder will time out.
+    await options.getByRole('heading', { name: 'Test Automation' }).click();
+
     const nameInput = options.getByPlaceholder(/project name/i);
     await nameInput.clear();
     await nameInput.fill('Test Automation v2');
-    const saveBtn = options.getByRole('button', { name: /^save$/i });
-    if (await saveBtn.count() > 0) {
-      await saveBtn.first().click();
-    } else {
-      await nameInput.blur();
-    }
+
+    // Press Enter to commit edit, then click the "Save project" icon button
+    // (rendered only when isDirty=true). aria-label was added so it's
+    // discoverable by getByRole.
+    await nameInput.press('Enter');
+    await options.getByRole('button', { name: /save project/i }).click();
 
     await expect(options.getByText('Test Automation v2').first()).toBeVisible();
 
@@ -97,13 +103,14 @@ test.describe('E2E-02 — Project CRUD Lifecycle', () => {
     await options.getByRole('button', { name: /^create$/i }).click();
 
     await options.getByText('Delete Me').first().click();
-    await options.getByRole('button', { name: /^delete/i }).first().click();
 
-    // Confirmation dialog uses an AlertDialogAction labeled either "Delete"
-    // or "Confirm" depending on context — click whichever appears last
-    // (the dialog action is rendered after the trigger).
-    const confirmBtn = options.getByRole('button', { name: /confirm|delete/i }).last();
-    await confirmBtn.click();
+    // ProjectHeader's delete trigger is an icon-only button. The aria-label
+    // ("Delete project") was added on IconButtonWithTooltip so role queries
+    // can find it without relying on visible text.
+    await options.getByRole('button', { name: /delete project/i }).click();
+
+    // Confirmation dialog uses an AlertDialogAction labeled "Delete".
+    await options.getByRole('button', { name: /^delete$/i }).click();
 
     await expect(options.getByText('Delete Me')).not.toBeVisible();
 

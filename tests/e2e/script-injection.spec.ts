@@ -282,15 +282,33 @@ test.describe('Script Injection', () => {
 
     const testPage = await context.newPage();
 
-    // Collect console errors on the test page
+    // Collect console errors on the test page. Filter out console output
+    // produced by Marco's own post-injection diagnostics — those are
+    // expected on a stub page where the macro globals (MacroController,
+    // RiseupAsiaMacroExt, etc.) intentionally don't exist. The assertion
+    // is about the *user's* injected script, not the extension's own
+    // verification log.
+    const ignoredPatterns = [
+      /macrocontroller/i,
+      /riseupasiamacroext/i,
+      /window\.marco/i,
+      /\[marco\]/i,
+      /post-injection verification/i,
+      /failed to load resource/i,
+      /favicon/i,
+    ];
+    const isIgnored = (text: string) => ignoredPatterns.some((rx) => rx.test(text));
+
     const pageErrors: string[] = [];
     testPage.on('console', (msg) => {
-      if (msg.type() === 'error') {
+      if (msg.type() === 'error' && !isIgnored(msg.text())) {
         pageErrors.push(msg.text());
       }
     });
     testPage.on('pageerror', (err) => {
-      pageErrors.push(err.message);
+      if (!isIgnored(err.message)) {
+        pageErrors.push(err.message);
+      }
     });
 
     await testPage.goto(TEST_PAGE_URL);
