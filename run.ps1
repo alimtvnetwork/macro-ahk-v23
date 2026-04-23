@@ -249,7 +249,6 @@ if ($uninstall -or $reinstall) {
     Write-Host ""
     exit $childExit
 }
-}
 
 # ============================================================================
 # BANNER
