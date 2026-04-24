@@ -1,5 +1,5 @@
 # Memory: architecture/build-preflight-system
-Updated: 2026-03-26
+Updated: 2026-04-24
 
 ## Modular Architecture (v2.0)
 
@@ -16,9 +16,23 @@ The build system was refactored from a monolithic 1758-line `run.ps1` into a ~27
 | `watch.ps1` | Start-WatchMode (FileSystemWatcher with debounce) |
 | `help.ps1` | Show-Help |
 
+## Standalone bundle registry — single source of truth
+
+Every standalone script MUST be registered in ALL of the following locations or the build will silently skip it / pass without producing the artifact:
+
+1. `package.json` — dedicated `build:<name>` script + entry in `build:extension` chain (`compile-instruction` step).
+2. `scripts/build-standalone.mjs` — `compile-instruction` prereq + `PARALLEL_JOBS` entry + `requiredFiles` preflight (tsconfig + vite.config).
+3. `scripts/check-standalone-dist.mjs` — `REQUIRED_ARTIFACTS` map (folder → required dist files including `instruction.json`).
+4. `powershell.json` — `standaloneArtifacts.required[]`.
+5. `tests/e2e/global-setup.ts` — `buildSteps` array (Playwright pre-extension build).
+6. `.github/workflows/ci.yml` — dedicated `build-<name>` job (parallel after `build-sdk`) + listed in `build-extension.needs` + `Download <name> dist` step.
+7. `tsconfig.<name>.json` + `vite.config.<name>.ts` exist.
+
+Currently registered: `marco-sdk`, `xpath`, `payment-banner-hider`, `macro-controller`.
+
 ## Parallel Standalone Builds
 
-`Build-AllStandaloneScripts` launches each standalone script (macro-controller, marco-sdk, xpath) as a separate PowerShell `Start-Job`, collecting output and reporting results. This replaces the previous sequential `foreach` loop.
+`Build-AllStandaloneScripts` launches each standalone script as a separate PowerShell `Start-Job`, collecting output and reporting results. The Node-based `scripts/build-standalone.mjs` mirrors this with `Promise.all` for non-PowerShell environments (CI, plain `pnpm build:standalone`).
 
 ## Console encoding rule
 
