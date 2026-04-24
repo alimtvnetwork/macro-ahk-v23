@@ -356,7 +356,32 @@ for (const r of report) {
 }
 console.log("");
 
-// Section B — resolved dist paths
+// Section A2 — exact missing locations + ready-to-paste snippets
+const scriptsWithGaps = report.filter((r) => Object.values(r.checks).some((v) => !v));
+if (scriptsWithGaps.length > 0) {
+    console.log(SR);
+    console.log("  Section A2 — Fix-it instructions (per missing location)");
+    console.log("  Copy/paste each snippet into the listed file at the listed");
+    console.log("  JSON path / YAML key. After patching, re-run this script.");
+    console.log(SR);
+
+    for (const r of scriptsWithGaps) {
+        const missing = locKeys.filter((k) => !r.checks[k]);
+        console.log(`  → ${r.name}  (${missing.length} missing location(s))`);
+        for (const k of missing) {
+            const hint = fixHint(k, r.name);
+            console.log(`     [${LOCATION_LABELS[k]}]`);
+            console.log(`       file:     ${hint.file}`);
+            console.log(`       at:       ${hint.jsonPath}`);
+            console.log(`       snippet:`);
+            for (const line of hint.snippet.split("\n")) {
+                console.log(`         ${line}`);
+            }
+            console.log("");
+        }
+    }
+}
+
 console.log(SR);
 console.log("  Section B — Resolved dist paths (post-build)");
 console.log("  Empty/missing dist folders mean the script's build:<name>");
