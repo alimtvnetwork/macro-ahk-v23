@@ -275,6 +275,104 @@ test.describe('Script Injection', () => {
     await extPage.close();
   });
 
+  test('safely handles malformed entries (missing id/code) without false positives', async ({ context, extensionId }) => {
+    await stubTestPage(context);
+    const extPage = await openPopupPage(context, extensionId);
+    await waitForServiceWorkerReady(extPage);
+
+    const testPage = await context.newPage();
+    await testPage.goto(TEST_PAGE_URL);
+    await testPage.waitForLoadState('domcontentloaded');
+
+    const tabId = await findTestTabId(extPage);
+
+    // Send a mix: 1 valid script + 3 malformed entries. The handler must
+    // (a) execute the valid one successfully, and (b) report each malformed
+    // entry as a failure with an errorMessage — never silently as success.
+    const injectionResult = await extPage.evaluate(async (targetTabId: number) => {
+      return new Promise<unknown>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Injection timed out')), 10000);
+        chrome.runtime.sendMessage(
+          {
+            type: 'INJECT_SCRIPTS',
+            tabId: targetTabId,
+            forceReload: true, // bypass any cached payload from prior tests
+            scripts: [
+              {
+                id: 'e2e-good-script',
+                name: 'Good Script',
+                code: `document.title = 'Marco E2E Mixed';`,
+                order: 0,
+              },
+              // Missing `id`
+              {
+                name: 'No-Id Script',
+                code: `void 0;`,
+                order: 1,
+              },
+              // Missing `code`
+              {
+                id: 'e2e-no-code-script',
+                name: 'No-Code Script',
+                order: 2,
+              },
+              // Empty `code` string
+              {
+                id: 'e2e-empty-code-script',
+                name: 'Empty-Code Script',
+                code: '',
+                order: 3,
+              },
+            ],
+          },
+          (res) => {
+            clearTimeout(timeout);
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(res);
+            }
+          },
+        );
+      });
+    }, tabId);
+
+    const response = injectionResult as InjectionResponse;
+    expect(response.results, 'INJECT_SCRIPTS returned no results array').toBeDefined();
+
+    // The good script must succeed.
+    expectScriptSucceeded(response, 'e2e-good-script');
+
+    // The malformed entries must each surface as failures with errorMessage.
+    // Their reported scriptIds come from the resolver's display-id fallback:
+    //   - missing id   → "unknown-<index>"
+    //   - present id   → echoed back
+    expectScriptFailedWithError(response, 'e2e-no-code-script');
+    expectScriptFailedWithError(response, 'e2e-empty-code-script');
+
+    // Missing-id entry — id falls back to "unknown-<index>". Locate it by
+    // scanning for any failure whose name matches what we sent. This guards
+    // against silent drops: if the resolver had quietly discarded it,
+    // there'd be no result row at all.
+    const noIdResult = response.results.find(
+      (r) => r.scriptId.startsWith('unknown-') && r.isSuccess === false,
+    );
+    expect(
+      noIdResult,
+      `Expected a "unknown-*" failure row for the missing-id entry. All results:\n${formatResultsForFailure(response.results)}`,
+    ).toBeDefined();
+    expect(noIdResult!.errorMessage).toBeDefined();
+
+    // Verify the good script's side-effect actually applied to the page,
+    // proving the malformed entries did not block the valid one.
+    await expect.poll(
+      async () => testPage.title(),
+      { timeout: 5000, message: 'document.title was never updated by the valid script' },
+    ).toBe('Marco E2E Mixed');
+
+    await extPage.close();
+  });
+
   test('injected script does not leak console errors', async ({ context, extensionId }) => {
     await stubTestPage(context);
     const extPage = await openPopupPage(context, extensionId);

@@ -16,7 +16,6 @@ import { ensureBuiltinScriptsExist } from "../builtin-script-guard";
 import { persistInjectionWarn } from "../injection-diagnostics";
 import { readAllProjects } from "./project-helpers";
 import { logBgWarnError, BgLogTag } from "../bg-logger";
-import type { JsonRecord } from "./handler-types";
 
 /** Executable script plus its resolved config and theme JSON payloads. */
 export interface PreparedInjectionScript {
@@ -33,46 +32,82 @@ export interface InjectionResolveResult {
     skipped: SkippedScript[];
 }
 
+/** Raw entry shape coming from popup / messaging surface (any of three flavors). */
+type RawEntry = ScriptEntry | InjectableScript | Record<string, string | number | boolean | null | undefined>;
+
+/** Classification of a single raw input entry. */
+type Classified =
+    | { kind: "project-entry"; value: ScriptEntry }
+    | { kind: "injectable"; value: InjectableScript }
+    | { kind: "empty-code"; id: string; name: string }
+    | { kind: "malformed"; id: string; name: string; missing: string };
+
 /** Resolves popup-provided scripts into executable injection inputs. */
 // eslint-disable-next-line max-lines-per-function -- resolver with diagnostics logging
 export async function resolveInjectionRequestScripts(
-    scripts: Array<ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>>,
+    scripts: RawEntry[],
 ): Promise<InjectionResolveResult> {
-    const hasOnlyProjectEntries = scripts.length > 0 && scripts.every(isProjectScriptEntry);
-
-    console.log("[injection:resolve] Input: %d scripts, isProjectEntries=%s",
-        scripts.length, hasOnlyProjectEntries);
-
-    if (hasOnlyProjectEntries) {
-        const result = await resolveProjectEntryScripts(scripts as ScriptEntry[]);
-        console.log("[injection:resolve] Resolved %d project entries → %d executable, %d skipped",
-            scripts.length, result.prepared.length, result.skipped.length);
-        return result;
-    }
-
-    const injectables = scripts.filter(isInjectableScript);
-    const mismatched = scripts.length - injectables.length;
+    const classified = scripts.map((entry, index) => classifyEntry(entry, index));
     const skipped: SkippedScript[] = [];
 
-    if (mismatched > 0) {
-        logBgWarnError(BgLogTag.INJECTION_RESOLVE, `${mismatched}/${scripts.length} scripts failed type check (missing 'id', 'code', or 'order'). These scripts will be SKIPPED silently unless fixed.`);
-        void persistInjectionWarn(
-            "REQUEST_RESOLVER_MISMATCH",
-            `[injection:resolve] ${mismatched}/${scripts.length} popup script payload(s) failed type check and were skipped`,
-        );
-        for (let i = 0; i < scripts.length; i++) {
-            if (!isInjectableScript(scripts[i])) {
-                const raw = scripts[i] as Record<string, string | number | boolean | null>;
-                skipped.push({
-                    scriptId: String(raw?.id ?? raw?.path ?? `unknown-${i}`),
-                    scriptName: String(raw?.name ?? raw?.path ?? `script-${i}`),
-                    reason: "resolver_mismatch" as SkipReason,
-                });
-            }
+    const projectEntries: ScriptEntry[] = [];
+    const injectables: InjectableScript[] = [];
+
+    for (const item of classified) {
+        if (item.kind === "project-entry") {
+            projectEntries.push(item.value);
+        } else if (item.kind === "injectable") {
+            injectables.push(item.value);
+        } else if (item.kind === "empty-code") {
+            logBgWarnError(
+                BgLogTag.INJECTION_RESOLVE,
+                `Script '${item.name}' (id=${item.id}) has empty code — skipping (empty_code).`,
+            );
+            void persistInjectionWarn(
+                "REQUEST_RESOLVER_EMPTY_CODE",
+                `[injection:resolve] Inline script '${item.name}' (id=${item.id}) had empty code and was skipped`,
+            );
+            skipped.push({
+                scriptId: item.id,
+                scriptName: item.name,
+                reason: "empty_code" as SkipReason,
+            });
+        } else {
+            logBgWarnError(
+                BgLogTag.INJECTION_RESOLVE,
+                `Malformed script entry id=${item.id} name=${item.name} — missing required field(s): ${item.missing}. Skipping (resolver_mismatch).`,
+            );
+            void persistInjectionWarn(
+                "REQUEST_RESOLVER_MISMATCH",
+                `[injection:resolve] Malformed entry '${item.name}' (id=${item.id}) missing ${item.missing}, skipped`,
+            );
+            skipped.push({
+                scriptId: item.id,
+                scriptName: item.name,
+                reason: "resolver_mismatch" as SkipReason,
+            });
         }
     }
 
-    console.log("[injection:resolve] Passthrough: %d injectable scripts", injectables.length);
+    const hasOnlyProjectEntries = projectEntries.length > 0 && injectables.length === 0;
+
+    console.log(
+        "[injection:resolve] Input: %d scripts → %d project-entries, %d injectables, %d skipped (mode=%s)",
+        scripts.length,
+        projectEntries.length,
+        injectables.length,
+        skipped.length,
+        hasOnlyProjectEntries ? "project-store" : "passthrough",
+    );
+
+    if (hasOnlyProjectEntries) {
+        const result = await resolveProjectEntryScripts(projectEntries);
+        return {
+            prepared: result.prepared,
+            skipped: [...skipped, ...result.skipped],
+        };
+    }
+
     return {
         prepared: sortPreparedScripts(
             injectables.map((injectable) => ({
@@ -124,22 +159,62 @@ function buildScriptBindings(entries: ScriptEntry[]): ScriptBindingResolved[] {
     }));
 }
 
-/** Returns true when the value is a stored project script entry. */
-function isProjectScriptEntry(value: ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>): value is ScriptEntry {
-    return typeof value === "object"
-        && value !== null
-        && typeof (value as ScriptEntry).path === "string"
-        && typeof (value as ScriptEntry).order === "number"
-        && !("code" in value);
-}
+/** Classifies a raw entry into one of four buckets — never throws. */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- defensive classifier
+function classifyEntry(entry: RawEntry, index: number): Classified {
+    if (typeof entry !== "object" || entry === null) {
+        return {
+            kind: "malformed",
+            id: `unknown-${index}`,
+            name: `script-${index}`,
+            missing: "entry is not an object",
+        };
+    }
 
-/** Returns true when the value is already an executable injection script. */
-function isInjectableScript(value: ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>): value is InjectableScript {
-    return typeof value === "object"
-        && value !== null
-        && typeof (value as InjectableScript).id === "string"
-        && typeof (value as InjectableScript).code === "string"
-        && typeof (value as InjectableScript).order === "number";
+    const candidate = entry as Record<string, unknown>;
+    const rawId = typeof candidate.id === "string" ? candidate.id : null;
+    const rawPath = typeof candidate.path === "string" ? candidate.path : null;
+    const rawName = typeof candidate.name === "string" ? candidate.name : null;
+    const rawCode = typeof candidate.code === "string" ? candidate.code : null;
+    const rawOrder = typeof candidate.order === "number" ? candidate.order : null;
+
+    const displayId = rawId ?? rawPath ?? `unknown-${index}`;
+    const displayName = rawName ?? rawPath ?? displayId;
+
+    // Project store entry shape: has `path` + `order`, no inline `code`.
+    if (rawPath !== null && rawOrder !== null && !("code" in candidate)) {
+        return { kind: "project-entry", value: entry as ScriptEntry };
+    }
+
+    // Inline injectable shape: needs id + code + order.
+    const missing: string[] = [];
+    if (rawId === null) missing.push("id");
+    if (!("code" in candidate)) missing.push("code");
+    if (rawOrder === null) missing.push("order");
+
+    if (missing.length > 0) {
+        return {
+            kind: "malformed",
+            id: displayId,
+            name: displayName,
+            missing: missing.join(", "),
+        };
+    }
+
+    // id, code key, and order are all present — but code might be empty/non-string.
+    if (rawCode === null) {
+        return {
+            kind: "malformed",
+            id: displayId,
+            name: displayName,
+            missing: "code (must be a string)",
+        };
+    }
+    if (rawCode.trim().length === 0) {
+        return { kind: "empty-code", id: displayId, name: displayName };
+    }
+
+    return { kind: "injectable", value: entry as InjectableScript };
 }
 
 /** Sorts prepared scripts by execution order. */
