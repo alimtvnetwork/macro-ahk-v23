@@ -244,7 +244,7 @@ function collectInlineSyntaxFailures(
 // eslint-disable-next-line max-lines-per-function, sonarjs/cognitive-complexity
 export async function handleInjectScripts(
     message: MessageRequest,
-): Promise<{ results: InjectionResult[] }> {
+): Promise<{ results: InjectionResult[]; inlineSyntaxErrorDetected: boolean }> {
     const pipelineStart = performance.now();
     const timings: Record<string, number> = {};
 
@@ -280,11 +280,12 @@ export async function handleInjectScripts(
                     isSuccess: false,
                     errorMessage: `Cannot inject into restricted URL: ${tabUrl}`,
                 })) as InjectionResult[],
+                inlineSyntaxErrorDetected: false,
             };
         }
     } catch (tabErr) {
         console.warn("[injection] BLOCKED — tab %d is inaccessible (closed or discarded): %s", msg.tabId, (tabErr as Error).message);
-        return { results: [] };
+        return { results: [], inlineSyntaxErrorDetected: false };
     }
 
     console.log("[injection] ── PIPELINE START ── tabId=%d, raw scripts=%d, forceReload=%s", msg.tabId, msg.scripts.length, isForceRun);
@@ -405,7 +406,10 @@ export async function handleInjectScripts(
                 level: "warn" as const,
             })),
         ], `⚠️ Marco Injection — 0 scripts (${totalMs}ms)`);
-        return { results: preflightFailureResults };
+        return {
+            results: preflightFailureResults,
+            inlineSyntaxErrorDetected: hasInlineSyntaxError,
+        };
     }
 
     // ✅ 15.5: Parallelize independent stages 1.5, 2a, 2b
@@ -532,7 +536,7 @@ export async function handleInjectScripts(
         void showInjectionFailureToastInTab(msg.tabId, failedNames, failCount, execResults.length, totalMs).catch(() => {});
     }
 
-    return { results };
+    return { results, inlineSyntaxErrorDetected: hasInlineSyntaxError };
 }
 
 
@@ -548,7 +552,7 @@ async function executeCachedPayload(
     pipelineStart: number,
     timings: Record<string, number>,
     time: <T>(label: string, fn: () => Promise<T>) => Promise<T>,
-): Promise<{ results: InjectionResult[] }> {
+): Promise<{ results: InjectionResult[]; inlineSyntaxErrorDetected: boolean }> {
     const allProjects = await time("readAllProjects", () =>
         readAllProjects().catch(() => [] as StoredProject[]));
 
@@ -628,7 +632,10 @@ async function executeCachedPayload(
         void showInjectionToastInTab(tabId, successCount, results.length, totalMs).catch(() => {});
     }
 
-    return { results };
+    // Cached path skips the syntax preflight entirely (only reachable when
+    // the request fingerprint matches a previously-validated payload), so
+    // the inline-syntax flag is always false here.
+    return { results, inlineSyntaxErrorDetected: false };
 }
 
 
