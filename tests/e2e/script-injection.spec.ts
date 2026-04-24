@@ -317,6 +317,72 @@ test.describe('Script Injection', () => {
     await extPage.close();
   });
 
+  test('inlineSyntaxErrorDetected is false on forceReload and cache-hit paths', async ({ context, extensionId }) => {
+    // This test pins the flag's contract for the *non-error* code paths:
+    //   1. `forceReload: true`  → preflight is explicitly skipped → flag MUST be false
+    //   2. Repeat identical request without forceReload → cache hit  → flag MUST be false
+    // If the handler ever leaks `true` on either path, this test fails
+    // immediately and points at the regression — without log scraping.
+    await stubTestPage(context);
+    const extPage = await openPopupPage(context, extensionId);
+    await waitForServiceWorkerReady(extPage);
+
+    const testPage = await context.newPage();
+    await testPage.goto(TEST_PAGE_URL);
+    await testPage.waitForLoadState('domcontentloaded');
+
+    const tabId = await findTestTabId(extPage);
+
+    const sendInjection = async (forceReload: boolean): Promise<InjectionResponse> => {
+      const result = await extPage.evaluate(
+        async ({ targetTabId, force }: { targetTabId: number; force: boolean }) => {
+          return new Promise<unknown>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Injection timed out')), 10000);
+            chrome.runtime.sendMessage(
+              {
+                type: 'INJECT_SCRIPTS',
+                tabId: targetTabId,
+                forceReload: force,
+                scripts: [
+                  {
+                    id: 'e2e-flag-cache-script',
+                    name: 'Flag Cache Script',
+                    code: `document.title = 'Marco E2E Flag';`,
+                    order: 0,
+                  },
+                ],
+              },
+              (res) => {
+                clearTimeout(timeout);
+                if (chrome.runtime.lastError) {
+                  reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                  resolve(res);
+                }
+              },
+            );
+          });
+        },
+        { targetTabId: tabId, force: forceReload },
+      );
+      return result as InjectionResponse;
+    };
+
+    // Pass 1: forceReload=true — preflight must be skipped, flag false.
+    const forced = await sendInjection(true);
+    expectScriptSucceeded(forced, 'e2e-flag-cache-script');
+    expectInlineSyntaxFlag(forced, false, 'forceReload bypass — preflight skipped');
+
+    // Pass 2: identical request, no forceReload — should hit the cache,
+    // and the cached path returns inlineSyntaxErrorDetected=false because
+    // the request's fingerprint already matched a validated payload.
+    const cached = await sendInjection(false);
+    expectScriptSucceeded(cached, 'e2e-flag-cache-script');
+    expectInlineSyntaxFlag(cached, false, 'cache-hit path — preflight not re-run');
+
+    await extPage.close();
+  });
+
   test('injected script does not leak console errors', async ({ context, extensionId }) => {
     await stubTestPage(context);
     const extPage = await openPopupPage(context, extensionId);
