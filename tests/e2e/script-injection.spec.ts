@@ -97,6 +97,14 @@ interface InjectionScriptResult {
 
 interface InjectionResponse {
   results: InjectionScriptResult[];
+  /**
+   * Set by the background injection handler to signal that the inline
+   * syntax preflight (`requestHasInlineSyntaxError`) tripped on this
+   * request. Tests use this to verify the preflight path was actually
+   * taken — instead of relying on log scraping or coincidental failure
+   * shapes that other code paths can produce.
+   */
+  inlineSyntaxErrorDetected?: boolean;
 }
 
 /**
@@ -163,7 +171,35 @@ function expectScriptFailedWithError(
   return result!;
 }
 
-test.describe('Script Injection', () => {
+/**
+ * Asserts the value of `inlineSyntaxErrorDetected` on an injection
+ * response.
+ *
+ * Why a dedicated helper:
+ *   - The flag is the *only* reliable signal that the inline syntax
+ *     preflight ran and tripped. Looking at `isSuccess` or
+ *     `errorMessage` text is brittle because malformed-entry skips,
+ *     CSP fallbacks, and runtime errors can all produce similar shapes.
+ *   - The handler must return `true` *only* when the preflight detected
+ *     a parse error, and `false` for every other path (cache hit,
+ *     `forceReload: true` bypass, restricted URL, all-good requests).
+ *
+ * On failure the assertion message includes the full results table so
+ * CI logs explain which scripts were in the request — without that
+ * context "expected true got false" is unactionable.
+ */
+function expectInlineSyntaxFlag(
+  response: InjectionResponse,
+  expected: boolean,
+  context: string,
+): void {
+  expect(
+    response.inlineSyntaxErrorDetected,
+    `Expected inlineSyntaxErrorDetected=${expected} (${context}), got ${String(
+      response.inlineSyntaxErrorDetected,
+    )}. All results:\n${formatResultsForFailure(response.results)}`,
+  ).toBe(expected);
+}
 
   test('injects a script that modifies the DOM on a test page', async ({ context, extensionId }) => {
     await stubTestPage(context);
