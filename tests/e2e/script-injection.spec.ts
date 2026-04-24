@@ -201,6 +201,8 @@ function expectInlineSyntaxFlag(
   ).toBe(expected);
 }
 
+test.describe('Script Injection', () => {
+
   test('injects a script that modifies the DOM on a test page', async ({ context, extensionId }) => {
     await stubTestPage(context);
     const extPage = await openPopupPage(context, extensionId);
