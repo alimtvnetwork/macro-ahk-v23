@@ -552,6 +552,62 @@ jobs:
           retention-days: 1
 
   # ════════════════════════════════════════════════════════════
+  # Job 3a3: E2E Smoke — Payment Banner Hider
+  #
+  # Runs tests/e2e/e2e-21-payment-banner-hider.spec.ts against the
+  # built bundle to confirm the script actually mutates the DOM as
+  # advertised (fading -> hiding -> done -> display:none) on a
+  # fixture page that matches the production XPath. Uses a dedicated
+  # lightweight playwright config (no full extension globalSetup).
+  # ════════════════════════════════════════════════════════════
+  e2e-payment-banner-hider:
+    name: E2E · Payment Banner Hider Smoke
+    needs: build-payment-banner-hider
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --prefer-offline --no-frozen-lockfile
+
+      - name: Download Payment Banner Hider dist
+        uses: actions/download-artifact@v4
+        with:
+          name: payment-banner-hider-dist
+          path: standalone-scripts/payment-banner-hider/dist/
+
+      - name: Install Playwright browsers (chromium only)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke test
+        run: npx playwright test --config=./playwright.config.payment-banner-hider.ts
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-pbh-results
+          path: |
+            test-results/payment-banner-hider/
+            test-results/junit-pbh.xml
+          retention-days: 7
+
+  # ════════════════════════════════════════════════════════════
   # Job 3b: Build Macro Controller (parallel with 3a, 3c)
   # ════════════════════════════════════════════════════════════
   build-macro-controller:
