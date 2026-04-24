@@ -145,10 +145,53 @@ function getInlineSyntaxCheckScript(
 function requestHasInlineSyntaxError(
     scripts: InjectionRequestScript[],
 ): boolean {
-    return scripts.some((script) => {
+    let inlineCandidateCount = 0;
+    let firstFailureId: string | null = null;
+    let firstFailureMessage: string | null = null;
+
+    const triggered = scripts.some((script, index) => {
         const inlineScript = getInlineSyntaxCheckScript(script);
-        return inlineScript !== null && detectSyntaxError(inlineScript.code) !== null;
+        if (inlineScript === null) {
+            return false;
+        }
+
+        inlineCandidateCount += 1;
+        const syntaxError = detectSyntaxError(inlineScript.code);
+        if (syntaxError === null) {
+            console.debug(
+                "[injection:syntax-preflight] script #%d id=%s name=%s parsed cleanly (codeLen=%d)",
+                index,
+                inlineScript.id,
+                inlineScript.name ?? inlineScript.id,
+                inlineScript.code.length,
+            );
+            return false;
+        }
+
+        firstFailureId = inlineScript.id;
+        firstFailureMessage = syntaxError;
+        console.warn(
+            "[injection:syntax-preflight] FAIL — script #%d id=%s name=%s codeLen=%d → %s",
+            index,
+            inlineScript.id,
+            inlineScript.name ?? inlineScript.id,
+            inlineScript.code.length,
+            syntaxError,
+        );
+        return true;
     });
+
+    console.log(
+        "[injection:syntax-preflight] requestHasInlineSyntaxError → %s (inline candidates=%d/%d, total scripts=%d, firstFailure=%s%s)",
+        triggered,
+        inlineCandidateCount,
+        scripts.length,
+        scripts.length,
+        firstFailureId ?? "none",
+        firstFailureMessage !== null ? ` "${firstFailureMessage}"` : "",
+    );
+
+    return triggered;
 }
 
 function collectInlineSyntaxFailures(
@@ -168,6 +211,12 @@ function collectInlineSyntaxFailures(
         }
 
         const scriptName = inlineScript.name ?? inlineScript.id;
+        console.warn(
+            "[injection:syntax-preflight] collectInlineSyntaxFailures recorded id=%s name=%s message=%s",
+            inlineScript.id,
+            scriptName,
+            syntaxError,
+        );
         failures.push({
             scriptId: inlineScript.id,
             scriptName,
@@ -176,6 +225,13 @@ function collectInlineSyntaxFailures(
             durationMs: 0,
         });
     }
+
+    console.log(
+        "[injection:syntax-preflight] collectInlineSyntaxFailures → %d failure(s) of %d total script(s): [%s]",
+        failures.length,
+        scripts.length,
+        failures.map((f) => f.scriptId).join(", ") || "none",
+    );
 
     return failures;
 }
