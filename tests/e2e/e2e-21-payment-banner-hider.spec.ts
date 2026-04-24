@@ -91,34 +91,40 @@ const FIXTURE_DATA_URL =
     'data:text/html;charset=utf-8,' + encodeURIComponent(FIXTURE_HTML);
 
 test.describe('E2E-21 — Payment Banner Hider Smoke', () => {
-    let browser: Browser;
-
-    test.beforeAll(async () => {
+    test('bundle file exists and is non-empty (orchestration sanity)', () => {
+        // Cheap pre-check that does NOT require a browser. If the registry report
+        // missed a wiring gap, the bundle would be missing or zero-byte. Fail with
+        // a precise message instead of letting the browser-based tests below crash
+        // with a misleading "addScriptTag failed".
         if (!fs.existsSync(BUNDLE_PATH)) {
             throw new Error(
                 `[e2e-21] Bundle not found at ${BUNDLE_PATH}.\n` +
-                `Reason: tests/e2e/global-setup.ts must run "build:payment-banner-hider" before this spec.\n` +
+                `Reason: tests/e2e/global-setup.ts must run "build:payment-banner-hider" before this spec, ` +
+                `OR (when running this spec via playwright.config.payment-banner-hider.ts) the CI job must ` +
+                `download the payment-banner-hider-dist artifact first.\n` +
                 `Fix: ensure global-setup buildSteps[] includes payment-banner-hider, ` +
                 `or run \`pnpm run build:payment-banner-hider\` manually.`,
             );
         }
-        // Launch a *plain* chromium (no extension) — see file header for rationale.
-        browser = await chromium.launch();
-    });
-
-    test.afterAll(async () => {
-        await browser?.close();
-    });
-
-    test('bundle file exists and is non-empty (orchestration sanity)', () => {
-        // Cheap pre-check: if the registry report missed a wiring gap, the bundle
-        // would be missing or zero-byte. Fail with a precise message instead of
-        // a misleading "addScriptTag failed" further down.
         const stat = fs.statSync(BUNDLE_PATH);
         expect(stat.size,
             `Built bundle is suspiciously small (${stat.size} bytes). ` +
             `Expected an IIFE around 2 KB. Re-run build:payment-banner-hider.`
         ).toBeGreaterThan(500);
+    });
+
+    let browser: Browser;
+
+    test.beforeAll(async () => {
+        // Launch a *plain* chromium (no extension) — see file header for rationale.
+        // Skipped automatically if the bundle is missing (the previous test will
+        // already have flagged that with a precise error).
+        if (!fs.existsSync(BUNDLE_PATH)) return;
+        browser = await chromium.launch();
+    });
+
+    test.afterAll(async () => {
+        await browser?.close();
     });
 
     test('hides the banner: data attribute progresses fading -> hiding -> done', async () => {
