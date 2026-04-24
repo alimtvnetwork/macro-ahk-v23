@@ -53,9 +53,10 @@ const JSON_MODE = argv.includes("--json");
  * and must be excluded from the registry crosscheck.
  */
 const NON_SCRIPT_FOLDERS = new Set([
-    "prompts",     // aggregated prompt JSON, no build:<name> script
-    "types",       // shared d.ts files
-    "shared",      // shared utilities (if present)
+    "prompts",      // aggregated prompt JSON, no build:<name> script
+    "types",        // shared d.ts files
+    "shared",       // shared utilities (if present)
+    "_generated",   // build-time generated artifacts (e.g. seed-manifest output)
     "node_modules",
 ]);
 
