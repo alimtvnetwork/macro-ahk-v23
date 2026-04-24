@@ -66,6 +66,42 @@ jobs:
         run: node scripts/report-spec-links-ci.mjs
 
   # ════════════════════════════════════════════════════════════
+  # Job 0a2: Standalone Registry Report — fast-fail orchestration guard
+  #
+  # Runs `scripts/report-standalone-registry.mjs --strict` so the very
+  # first thing visible in the CI log is a checklist of every standalone
+  # script and which orchestration source-of-truth files contain it.
+  # If a new bundle is added but only wired into 5 of the 7 required
+  # locations (the recurring failure that hid `payment-banner-hider`
+  # from CI for several PRs), the missing rows show up as `[X]` with
+  # explicit location names — no need to chase a downstream
+  # "artifact missing" error 8 minutes later.
+  #
+  # Also writes a markdown table to GITHUB_STEP_SUMMARY so the report is
+  # one click away from the PR checks tab. Listed in build-extension's
+  # `needs:` so a registry gap blocks merge.
+  #
+  # No install needed — pure Node + repo files. Returns in <1s.
+  # ════════════════════════════════════════════════════════════
+  report-standalone-registry:
+    name: Preflight · Standalone Registry Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Print expected scripts and resolved dist paths (--strict)
+        run: node scripts/report-standalone-registry.mjs --strict
+
+  # ════════════════════════════════════════════════════════════
   # Job 0b: Typecheck Standalone Scripts — fast-fail TS guard
   #
   # Runs `tsc --noEmit` against every standalone-script tsconfig
@@ -449,6 +485,73 @@ jobs:
           retention-days: 1
 
   # ════════════════════════════════════════════════════════════
+  # Job 3a2: Build Payment Banner Hider (parallel with 3a, 3b, 3c)
+  # ════════════════════════════════════════════════════════════
+  build-payment-banner-hider:
+    name: Build · Payment Banner Hider
+    needs: build-sdk
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            standalone-scripts/*/node_modules
+          key: ${{ runner.os }}-nm-pbh-${{ hashFiles('**/pnpm-lock.yaml', '**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nm-pbh-
+
+      - name: Install dependencies
+        run: pnpm install --prefer-offline --no-frozen-lockfile
+
+      - name: Download SDK dist
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-dist
+          path: standalone-scripts/marco-sdk/dist/
+
+      - name: Build Payment Banner Hider
+        run: pnpm run build:payment-banner-hider
+
+      - name: Upload Payment Banner Hider dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-banner-hider-dist
+          path: standalone-scripts/payment-banner-hider/dist/
+          retention-days: 1
+
+  # ════════════════════════════════════════════════════════════
   # Job 3b: Build Macro Controller (parallel with 3a, 3c)
   # ════════════════════════════════════════════════════════════
   build-macro-controller:
@@ -596,7 +699,7 @@ jobs:
   # ════════════════════════════════════════════════════════════
   build-extension:
     name: Build · Chrome Extension
-    needs: [spec-links, typecheck-standalone, lint-standalone, build-sdk, build-xpath, build-macro-controller, build-prompts]
+    needs: [spec-links, report-standalone-registry, typecheck-standalone, lint-standalone, build-sdk, build-xpath, build-payment-banner-hider, build-macro-controller, build-prompts]
     runs-on: ubuntu-latest
 
     steps:
@@ -653,6 +756,12 @@ jobs:
         with:
           name: xpath-dist
           path: standalone-scripts/xpath/dist/
+
+      - name: Download Payment Banner Hider dist
+        uses: actions/download-artifact@v4
+        with:
+          name: payment-banner-hider-dist
+          path: standalone-scripts/payment-banner-hider/dist/
 
       - name: Download Macro Controller dist
         uses: actions/download-artifact@v4
