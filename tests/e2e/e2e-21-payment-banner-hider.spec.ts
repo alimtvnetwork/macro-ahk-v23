@@ -90,12 +90,16 @@ const FIXTURE_HTML = `<!doctype html>
 const FIXTURE_DATA_URL =
     'data:text/html;charset=utf-8,' + encodeURIComponent(FIXTURE_HTML);
 
-test.describe('E2E-21 — Payment Banner Hider Smoke', () => {
+// ──────────────────────────────────────────────────────────────────────
+// Suite 1 — File-only sanity (no browser needed)
+//
+// Runs even on machines/CI runners without Chromium system libs. If this
+// fails, every test below would also fail with a misleading
+// "browser couldn't launch" message — this catches the orchestration gap
+// up front with a clear error.
+// ──────────────────────────────────────────────────────────────────────
+test.describe('E2E-21 — Payment Banner Hider · file sanity', () => {
     test('bundle file exists and is non-empty (orchestration sanity)', () => {
-        // Cheap pre-check that does NOT require a browser. If the registry report
-        // missed a wiring gap, the bundle would be missing or zero-byte. Fail with
-        // a precise message instead of letting the browser-based tests below crash
-        // with a misleading "addScriptTag failed".
         if (!fs.existsSync(BUNDLE_PATH)) {
             throw new Error(
                 `[e2e-21] Bundle not found at ${BUNDLE_PATH}.\n` +
@@ -112,22 +116,25 @@ test.describe('E2E-21 — Payment Banner Hider Smoke', () => {
             `Expected an IIFE around 2 KB. Re-run build:payment-banner-hider.`
         ).toBeGreaterThan(500);
     });
+});
 
-    let browser: Browser;
-
-    test.beforeAll(async () => {
-        // Launch a *plain* chromium (no extension) — see file header for rationale.
-        // Skipped automatically if the bundle is missing (the previous test will
-        // already have flagged that with a precise error).
-        if (!fs.existsSync(BUNDLE_PATH)) return;
-        browser = await chromium.launch();
+// ──────────────────────────────────────────────────────────────────────
+// Suite 2 — Browser-based DOM behavior tests
+//
+// Uses Playwright's built-in `browser` fixture (lazy-launches a single
+// chromium per worker). No `chromium.launch()` in beforeAll, so the
+// file-sanity test above can pass even when chromium isn't runnable.
+// ──────────────────────────────────────────────────────────────────────
+test.describe('E2E-21 — Payment Banner Hider · DOM behavior', () => {
+    test.beforeEach(({}, testInfo) => {
+        // Skip the entire browser suite cleanly if the bundle is missing —
+        // the file-sanity suite already produced the actionable error.
+        if (!fs.existsSync(BUNDLE_PATH)) {
+            testInfo.skip(true, 'Bundle missing — see file-sanity suite for the actionable error.');
+        }
     });
 
-    test.afterAll(async () => {
-        await browser?.close();
-    });
-
-    test('hides the banner: data attribute progresses fading -> hiding -> done', async () => {
+    test('hides the banner: data attribute progresses fading -> hiding -> done', async ({ browser }) => {
         const context = await browser.newContext();
         const page = await context.newPage();
         await page.goto(FIXTURE_DATA_URL);
@@ -182,7 +189,7 @@ test.describe('E2E-21 — Payment Banner Hider Smoke', () => {
         await context.close();
     });
 
-    test('exposes window.PaymentBannerHider with version + check() (debug API)', async () => {
+    test('exposes window.PaymentBannerHider with version + check() (debug API)', async ({ browser }) => {
         const context = await browser.newContext();
         const page = await context.newPage();
         await page.goto(FIXTURE_DATA_URL);
@@ -211,7 +218,7 @@ test.describe('E2E-21 — Payment Banner Hider Smoke', () => {
         await context.close();
     });
 
-    test('does NOT hide a banner when trigger text is absent (no false positives)', async () => {
+    test('does NOT hide a banner when trigger text is absent (no false positives)', async ({ browser }) => {
         // Same DOM shape, different text — the script must leave it alone.
         const innocentHtml = FIXTURE_HTML.replace(
             'Payment issue detected.',
