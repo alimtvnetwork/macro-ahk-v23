@@ -513,6 +513,30 @@ Before any code is written, please confirm:
   `TSettings` generic, or should we expose a named `EmptySettings` type?
 - **Q4.** Does the `id-denylist` list cover everything you want banned? Add
   or remove names before we wire the lint rule.
+- **Q5.** Hide strategy for the banner — single `marco-banner--hidden` class
+  that flips `display:none` after a CSS `transition` (simplest, recommended) —
+  or keep the three-phase enum (`Fading` → `Hiding` → `Done`)? §11.3 below
+  documents both.
+- **Q6.** CSS bundle filename — `payment-banner-hider.css` (consistent with
+  `marco-looping.css` pattern) or shorter `banner-hider.css`?
+- **Q7.** Where do per-project state enums (e.g. `HandledAttrState`,
+  `EventName`, `RunPhase`) live? Options: (a) in
+  `standalone-scripts/types/instruction/` if the same enum is reused by
+  ≥2 projects, (b) in `standalone-scripts/<project>/src/enums/` for
+  project-local enums. Spec assumes **(b) by default, (a) on second
+  consumer**.
+- **Q8.** Class dependency injection mechanism — constructor parameters
+  with default values (no DI framework) or a tiny manual DI container?
+  Spec assumes **constructor parameters** for zero-dependency simplicity.
+- **Q9.** Lint rule activation — flip every new rule on as `error` from
+  day one (will fail the existing build until §6 migration completes), or
+  warn-then-error after the migration ships? Spec assumes
+  **warn → error** in two passes.
+- **Q10.** Class naming — `PaymentBannerHider` (matches PascalCase code
+  name) or `PaymentBannerHiderScript` suffix to disambiguate from the
+  debug global of the same name? Spec assumes **no suffix**, with the
+  debug global typed via `standalone-scripts/types/riseup-namespace.d.ts`
+  per `mem://standards/no-type-casting`.
 
 ---
 
@@ -526,3 +550,203 @@ These are tracked for later phases:
   `RiseupAsiaMacroExt.Projects.<CodeName>.xpath` namespace.
 - Auto-generate per-project namespace `globals.d.ts` from the project's
   `ProjectInstruction<TSettings>` so `_internal` shapes stay in sync.
+- Build `scripts/scaffold-standalone.mjs` that copies a canonical
+  template directory so new projects cannot drift from the conventions.
+
+---
+
+## 11. Class Architecture (NEW — from 2026-04-24 RCA)
+
+Every `standalone-scripts/<project>/src/index.ts` exports **one default
+class**, named after the project's PascalCase code name. All helpers are
+private methods or injected dependencies. See
+`mem://standards/class-based-standalone-scripts`.
+
+### 11.1 Skeleton
+
+```ts
+import { StyleInjector } from "./style-injector";
+import { BannerObserver } from "./banner-observer";
+import { HandledAttrState } from "./enums/handled-attr-state";
+import { EventName } from "./enums/event-name";
+
+export default class PaymentBannerHider {
+    private readonly styleInjector: StyleInjector;
+    private readonly bannerObserver: BannerObserver;
+
+    constructor(dependencies: {
+        styleInjector?: StyleInjector;
+        bannerObserver?: BannerObserver;
+    } = {}) {
+        this.styleInjector = dependencies.styleInjector ?? new StyleInjector();
+        this.bannerObserver = dependencies.bannerObserver ?? new BannerObserver();
+    }
+
+    public start(): void { /* … */ }
+    public stop(): void { /* … */ }
+    public dispose(): void { /* … */ }
+
+    private hideBanner(element: HTMLElement): void { /* … */ }
+}
+```
+
+### 11.2 Auto-run footer
+
+```ts
+const instance = new PaymentBannerHider();
+instance.start();
+```
+
+### 11.3 Hide strategy — recommended (single class)
+
+CSS (in `payment-banner-hider/less/payment-banner-hider.less`):
+
+```less
+.marco-banner-hidden {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity 250ms ease-out, max-height 900ms ease-out;
+}
+.marco-banner-hidden--final { display: none; }
+```
+
+TS:
+
+```ts
+private hideBanner(element: HTMLElement): void {
+    element.classList.add("marco-banner-hidden");
+    window.setTimeout(() => element.classList.add("marco-banner-hidden--final"), 1000);
+}
+```
+
+If you prefer the three-phase enum approach, answer **Q5 = enum** and the
+spec adds a `HandledAttrState` enum used by the data attribute selector.
+
+---
+
+## 12. No `!important` (NEW)
+
+Banned in all CSS / LESS sources and inline TS strings. See
+`mem://standards/no-css-important`. Every existing `!important` in
+`payment-banner-hider/src/index.ts` lines 33–63 must be removed during the
+refactor and replaced with selector-specificity wins (see §11.3 example —
+`.marco-banner-hidden` wins over the host's class-only selectors because
+it is added at the deepest classList depth).
+
+---
+
+## 13. No Error Swallowing (NEW)
+
+Every `catch` in standalone-scripts must log via the namespace logger,
+re-throw, or carry an inline `// SWALLOW JUSTIFIED: <reason>` comment. See
+`mem://standards/no-error-swallowing`. The current `getTargetNode` impl —
+
+```ts
+} catch {
+    return null;
+}
+```
+
+— must become:
+
+```ts
+} catch (error: CaughtError) {
+    RiseupAsiaMacroExt.Logger?.error(
+        "PaymentBannerHider.resolveTargetNode",
+        "XPath evaluate failed",
+        error,
+    );
+
+    return null;
+}
+```
+
+---
+
+## 14. No Type Casting (NEW)
+
+Bans `as <T>`, `as unknown as <T>`, `<T>value`, `as any` in
+`standalone-scripts/**`. See `mem://standards/no-type-casting`. The
+existing line —
+
+```ts
+(window as unknown as { PaymentBannerHider: typeof PaymentBannerHider })
+    .PaymentBannerHider = PaymentBannerHider;
+```
+
+— must be replaced by **declaring the global once** in
+`standalone-scripts/types/riseup-namespace.d.ts`:
+
+```ts
+declare global {
+    interface Window {
+        PaymentBannerHider?: import("../payment-banner-hider/src/index").default;
+    }
+}
+```
+
+…then the runtime line becomes a plain assignment with **no cast**:
+
+```ts
+window.PaymentBannerHider = instance;
+```
+
+---
+
+## 15. Magic Strings → Enums (NEW)
+
+The script currently uses raw string literals for the data-attribute
+states (`"fading"`, `"hiding"`, `"done"`), the attribute name
+(`"data-payment-banner-hidden"`), and the style-tag id
+(`"payment-banner-hider-styles"`). These move to enums + constants:
+
+```ts
+// standalone-scripts/payment-banner-hider/src/enums/handled-attr-state.ts
+export enum HandledAttrState {
+    Fading = "fading",
+    Hiding = "hiding",
+    Done = "done",
+}
+
+// standalone-scripts/payment-banner-hider/src/enums/event-name.ts
+export enum EventName {
+    DomContentLoaded = "DOMContentLoaded",
+}
+
+// standalone-scripts/payment-banner-hider/src/constants.ts
+export const ATTR_HANDLED = "data-payment-banner-hidden";
+export const STYLE_ID = "payment-banner-hider-styles";
+export const TARGET_TEXT = "Payment issue detected.";
+export const TARGET_XPATH = "/html/body/div[2]/main/div/div[1]";
+```
+
+Per spec **Q7**, these enums start project-local; if a second project
+needs `HandledAttrState`, they get promoted to
+`standalone-scripts/types/instruction/`.
+
+---
+
+## 16. Blank Line Before `return` (NEW)
+
+Per `mem://standards/blank-line-before-return`, every multi-statement
+function body must have a blank line before each `return`. The current
+file has at least 4 violations (lines 28–30, 78–81, 86–88, 104–113). The
+ESLint rule `padding-line-between-statements: ["error", { blankLine:
+"always", prev: "*", next: "return" }]` enforces this.
+
+---
+
+## 17. Prerequisite Check — Pre-Write Discipline (NEW)
+
+This entire section exists because `payment-banner-hider/src/index.ts`
+was written without first reading the canonical macro-controller pattern
+(LESS sources → compiled CSS → declared in `instruction.assets.css[]` →
+class-based runtime with constants module). The recurrence-prevention rule
+is `mem://standards/pre-write-check`: read the closest existing sibling
+and the relevant guideline before writing **any** new file in a known
+project area. The full RCA is at:
+
+`spec/03-error-manage/01-error-resolution/03-retrospectives/2026-04-24-payment-banner-hider-rca.md`
+
