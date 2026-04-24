@@ -459,6 +459,26 @@ if (process.env.GITHUB_STEP_SUMMARY) {
         lines.push("```");
         lines.push("");
     }
+    if (scriptsWithGaps.length > 0) {
+        lines.push("## Fix-it instructions");
+        lines.push("");
+        lines.push("Each row lists the exact file + JSON path / YAML key + snippet to add.");
+        lines.push("");
+        for (const r of scriptsWithGaps) {
+            const missing = locKeys.filter((k) => !r.checks[k]);
+            lines.push(`### \`${r.name}\` — ${missing.length} missing`);
+            lines.push("");
+            for (const k of missing) {
+                const hint = fixHint(k, r.name);
+                lines.push(`**${LOCATION_LABELS[k]}** — \`${hint.file}\` @ \`${hint.jsonPath}\``);
+                lines.push("");
+                lines.push("```");
+                lines.push(hint.snippet);
+                lines.push("```");
+                lines.push("");
+            }
+        }
+    }
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
 }
 
