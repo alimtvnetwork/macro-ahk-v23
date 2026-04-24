@@ -116,8 +116,10 @@ function buildRequestFingerprint(
         .join("|");
 }
 
+type InjectionRequestScript = ScriptEntry | InjectableScript | Record<string, string | number | boolean | null | undefined>;
+
 function isInlineInjectableRequest(
-    value: ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>,
+    value: InjectionRequestScript,
 ): value is InjectableScript {
     return typeof value === "object"
         && value !== null
@@ -127,7 +129,7 @@ function isInlineInjectableRequest(
 }
 
 function requestHasInlineSyntaxError(
-    scripts: Array<ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>>,
+    scripts: InjectionRequestScript[],
 ): boolean {
     return scripts.some((script) =>
         isInlineInjectableRequest(script)
@@ -136,7 +138,7 @@ function requestHasInlineSyntaxError(
 }
 
 function collectInlineSyntaxFailures(
-    scripts: Array<ScriptEntry | InjectableScript | Record<string, string | number | boolean | null>>,
+    scripts: InjectionRequestScript[],
 ): InjectionResult[] {
     const failures: InjectionResult[] = [];
 
@@ -228,8 +230,10 @@ export async function handleInjectScripts(
         console.log("[injection] FORCE RUN — pipeline cache cleared by user");
     }
 
-    const inlineSyntaxFailures = collectInlineSyntaxFailures(msg.scripts);
-    const hasInlineSyntaxError = !isForceRun && inlineSyntaxFailures.length > 0;
+    const hasInlineSyntaxError = !isForceRun && requestHasInlineSyntaxError(msg.scripts as InjectionRequestScript[]);
+    const inlineSyntaxFailures = hasInlineSyntaxError
+        ? collectInlineSyntaxFailures(msg.scripts as InjectionRequestScript[])
+        : [];
     if (hasInlineSyntaxError) {
         await cacheDelete(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY);
         console.log("[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared");
