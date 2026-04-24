@@ -8,7 +8,7 @@
  */
 
 import type { ScriptEntry } from "../shared/project-types";
-import type { InjectionResult } from "../shared/injection-types";
+import type { InjectScriptsResponse } from "../shared/injection-types";
 import { MessageType } from "../shared/messages";
 import { handleMessage } from "./message-router";
 import { logCaughtError, logBgWarnError, BgLogTag} from "./bg-logger";
