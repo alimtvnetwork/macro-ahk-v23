@@ -145,10 +145,53 @@ function getInlineSyntaxCheckScript(
 function requestHasInlineSyntaxError(
     scripts: InjectionRequestScript[],
 ): boolean {
-    return scripts.some((script) => {
+    let inlineCandidateCount = 0;
+    let firstFailureId: string | null = null;
+    let firstFailureMessage: string | null = null;
+
+    const triggered = scripts.some((script, index) => {
         const inlineScript = getInlineSyntaxCheckScript(script);
-        return inlineScript !== null && detectSyntaxError(inlineScript.code) !== null;
+        if (inlineScript === null) {
+            return false;
+        }
+
+        inlineCandidateCount += 1;
+        const syntaxError = detectSyntaxError(inlineScript.code);
+        if (syntaxError === null) {
+            console.debug(
+                "[injection:syntax-preflight] script #%d id=%s name=%s parsed cleanly (codeLen=%d)",
+                index,
+                inlineScript.id,
+                inlineScript.name ?? inlineScript.id,
+                inlineScript.code.length,
+            );
+            return false;
+        }
+
+        firstFailureId = inlineScript.id;
+        firstFailureMessage = syntaxError;
+        console.warn(
+            "[injection:syntax-preflight] FAIL — script #%d id=%s name=%s codeLen=%d → %s",
+            index,
+            inlineScript.id,
+            inlineScript.name ?? inlineScript.id,
+            inlineScript.code.length,
+            syntaxError,
+        );
+        return true;
     });
+
+    console.log(
+        "[injection:syntax-preflight] requestHasInlineSyntaxError → %s (inline candidates=%d/%d, total scripts=%d, firstFailure=%s%s)",
+        triggered,
+        inlineCandidateCount,
+        scripts.length,
+        scripts.length,
+        firstFailureId ?? "none",
+        firstFailureMessage !== null ? ` "${firstFailureMessage}"` : "",
+    );
+
+    return triggered;
 }
 
 function collectInlineSyntaxFailures(
@@ -168,6 +211,12 @@ function collectInlineSyntaxFailures(
         }
 
         const scriptName = inlineScript.name ?? inlineScript.id;
+        console.warn(
+            "[injection:syntax-preflight] collectInlineSyntaxFailures recorded id=%s name=%s message=%s",
+            inlineScript.id,
+            scriptName,
+            syntaxError,
+        );
         failures.push({
             scriptId: inlineScript.id,
             scriptName,
@@ -176,6 +225,13 @@ function collectInlineSyntaxFailures(
             durationMs: 0,
         });
     }
+
+    console.log(
+        "[injection:syntax-preflight] collectInlineSyntaxFailures → %d failure(s) of %d total script(s): [%s]",
+        failures.length,
+        scripts.length,
+        failures.map((f) => f.scriptId).join(", ") || "none",
+    );
 
     return failures;
 }
@@ -245,13 +301,22 @@ export async function handleInjectScripts(
         console.log("[injection] FORCE RUN — pipeline cache cleared by user");
     }
 
+    if (isForceRun) {
+        console.log(
+            "[injection:syntax-preflight] SKIPPED — forceReload=true, syntax preflight bypassed (raw scripts=%d)",
+            msg.scripts.length,
+        );
+    }
     const hasInlineSyntaxError = !isForceRun && requestHasInlineSyntaxError(msg.scripts as InjectionRequestScript[]);
     const inlineSyntaxFailures = hasInlineSyntaxError
         ? collectInlineSyntaxFailures(msg.scripts as InjectionRequestScript[])
         : [];
     if (hasInlineSyntaxError) {
         await cacheDelete(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY);
-        console.log("[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared");
+        console.warn(
+            "[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared. Failing scripts: [%s]",
+            inlineSyntaxFailures.map((f) => `${f.scriptId} (${f.errorMessage ?? "no message"})`).join(" | "),
+        );
     }
 
     // ── Cache Gate: check for cached wrapped payload ──
@@ -691,8 +756,18 @@ function detectSyntaxError(code: string): string | null {
         return null;
     } catch (err) {
         if (err instanceof SyntaxError) {
+            console.debug(
+                "[injection:syntax-preflight] detectSyntaxError caught SyntaxError (codeLen=%d): %s",
+                code.length,
+                err.message,
+            );
             return err.message;
         }
+        console.debug(
+            "[injection:syntax-preflight] detectSyntaxError caught non-SyntaxError (codeLen=%d): %s",
+            code.length,
+            err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+        );
         return null;
     }
 }
