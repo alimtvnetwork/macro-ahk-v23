@@ -117,24 +117,38 @@ function buildRequestFingerprint(
 }
 
 type InjectionRequestScript = ScriptEntry | InjectableScript | Record<string, string | number | boolean | null | undefined>;
+type InlineSyntaxCheckScript = {
+    id: string;
+    name?: string;
+    code: string;
+};
 
-function isInlineInjectableRequest(
+function getInlineSyntaxCheckScript(
     value: InjectionRequestScript,
-): value is InjectableScript {
-    return typeof value === "object"
-        && value !== null
-        && typeof (value as InjectableScript).id === "string"
-        && typeof (value as InjectableScript).code === "string"
-        && typeof (value as InjectableScript).order === "number";
+): InlineSyntaxCheckScript | null {
+    if (typeof value !== "object" || value === null) {
+        return null;
+    }
+
+    const candidate = value as Partial<InjectableScript> & { id?: string; code?: string; name?: string };
+    if (typeof candidate.id !== "string" || typeof candidate.code !== "string") {
+        return null;
+    }
+
+    return {
+        id: candidate.id,
+        name: typeof candidate.name === "string" ? candidate.name : candidate.id,
+        code: candidate.code,
+    };
 }
 
 function requestHasInlineSyntaxError(
     scripts: InjectionRequestScript[],
 ): boolean {
-    return scripts.some((script) =>
-        isInlineInjectableRequest(script)
-        && detectSyntaxError(script.code) !== null,
-    );
+    return scripts.some((script) => {
+        const inlineScript = getInlineSyntaxCheckScript(script);
+        return inlineScript !== null && detectSyntaxError(inlineScript.code) !== null;
+    });
 }
 
 function collectInlineSyntaxFailures(
@@ -143,18 +157,19 @@ function collectInlineSyntaxFailures(
     const failures: InjectionResult[] = [];
 
     for (const script of scripts) {
-        if (!isInlineInjectableRequest(script)) {
+        const inlineScript = getInlineSyntaxCheckScript(script);
+        if (inlineScript === null) {
             continue;
         }
 
-        const syntaxError = detectSyntaxError(script.code);
+        const syntaxError = detectSyntaxError(inlineScript.code);
         if (syntaxError === null) {
             continue;
         }
 
-        const scriptName = script.name ?? script.id;
+        const scriptName = inlineScript.name ?? inlineScript.id;
         failures.push({
-            scriptId: script.id,
+            scriptId: inlineScript.id,
             scriptName,
             isSuccess: false,
             errorMessage: `Script "${scriptName}" has a syntax error: ${syntaxError}`,
