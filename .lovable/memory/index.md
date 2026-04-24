@@ -99,3 +99,10 @@ Updated: just now
 - [Screen-scoped variables rule](mem://architecture/screen-scoped-variables-rule) — Per-screen XPath/selector configs must never collide; HomepageDashboardVariables is the first instance
 - [Deferred workstreams](mem://preferences/deferred-workstreams) — React tests, manual Chrome testing, P Store, cross-project sync — DO NOT auto-recommend
 - [Session 2026-04-23 — TS Migration V2 cleared](mem://workflow/14-session-2026-04-23-ts-migration-v2-cleared) — v2.225.0; Phases 02/03/04/05 complete; suite 445/445 passing
+- [Pre-write check](mem://standards/pre-write-check) — Read closest sibling + relevant guideline before writing any new file
+- [No `!important`](mem://standards/no-css-important) — Banned in CSS/LESS and inline TS strings; use selector specificity
+- [No error swallowing](mem://standards/no-error-swallowing) — `catch` must log/re-throw or carry `// SWALLOW JUSTIFIED:` comment
+- [No type casting](mem://standards/no-type-casting) — `as T`/`as unknown as T` banned in standalone-scripts; use type guards
+- [Class-based standalone scripts](mem://standards/class-based-standalone-scripts) — Single default class per entry file, no module-level free functions
+- [CSS in own file (standalone-scripts)](mem://standards/standalone-scripts-css-in-own-file) — CSS lives in `<project>/less/`, declared in `assets.css[]`
+- [Blank line before return](mem://standards/blank-line-before-return) — Required before every multi-statement-block `return`
