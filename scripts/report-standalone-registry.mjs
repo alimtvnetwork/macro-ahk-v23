@@ -193,6 +193,109 @@ const LOCATION_LABELS = {
     viteConfig:         "vite.config.<name>.ts",
 };
 
+/**
+ * Per missing location: exact file + JSON path / YAML key + ready-to-paste
+ * snippet. Lets the operator patch orchestration without grepping the repo.
+ */
+function fixHint(locationKey, scriptName) {
+    const buildKey = scriptName === "marco-sdk" ? "build:sdk" : `build:${scriptName}`;
+    switch (locationKey) {
+        case "pkgScript":
+            return {
+                file: "package.json",
+                jsonPath: `scripts["${buildKey}"]`,
+                snippet: `"${buildKey}": "vite build --config vite.config.${scriptName}.ts"`,
+            };
+        case "pkgExtensionChain":
+            return {
+                file: "package.json",
+                jsonPath: `scripts["build:extension"]`,
+                snippet: `... && node scripts/compile-instruction.mjs standalone-scripts/${scriptName} && npm run ${buildKey} && ...`,
+            };
+        case "buildStandalone":
+            return {
+                file: "scripts/build-standalone.mjs",
+                jsonPath: "PARALLEL_JOBS[] / compile-instruction targets",
+                snippet:
+                    `compile-instruction targets:  "standalone-scripts/${scriptName}"\n` +
+                    `PARALLEL_JOBS:                { name: "${scriptName}", cmd: "npm", args: ["run", "${buildKey}"] }`,
+            };
+        case "checkDist":
+            return {
+                file: "scripts/check-standalone-dist.mjs",
+                jsonPath: "REQUIRED_ARTIFACTS",
+                snippet:
+                    `"${scriptName}": [\n` +
+                    `    "standalone-scripts/${scriptName}/dist/${scriptName}.js",\n` +
+                    `    "standalone-scripts/${scriptName}/dist/instruction.json",\n` +
+                    `]`,
+            };
+        case "powershellJson":
+            return {
+                file: "powershell.json",
+                jsonPath: "standaloneArtifacts.required[]",
+                snippet: `{ "folder": "${scriptName}", "files": ["${scriptName}.js", "instruction.json"] }`,
+            };
+        case "globalSetup":
+            return {
+                file: "tests/e2e/global-setup.ts",
+                jsonPath: "buildSteps[]",
+                snippet: `{ name: '${buildKey}', cmd: 'npm', args: ['run', '${buildKey}'] }`,
+            };
+        case "ciJob":
+            return {
+                file: ".github/workflows/ci.yml",
+                jsonPath: `jobs.build-${scriptName}  (+ jobs.build-extension.needs[])`,
+                snippet:
+                    `build-${scriptName}:\n` +
+                    `  runs-on: ubuntu-latest\n` +
+                    `  needs: [install]\n` +
+                    `  steps:\n` +
+                    `    - uses: actions/checkout@v4\n` +
+                    `    - run: npm ci\n` +
+                    `    - run: npm run ${buildKey}\n` +
+                    `    - uses: actions/upload-artifact@v4\n` +
+                    `      with:\n` +
+                    `        name: standalone-${scriptName}\n` +
+                    `        path: standalone-scripts/${scriptName}/dist/\n` +
+                    `# Then: add 'build-${scriptName}' to jobs.build-extension.needs[]\n` +
+                    `# and download-artifact 'standalone-${scriptName}' before the extension build.`,
+            };
+        case "tsconfig":
+            return {
+                file: `tsconfig.${scriptName}.json`,
+                jsonPath: "(create file)",
+                snippet:
+                    `{\n` +
+                    `  "extends": "./tsconfig.standalone.base.json",\n` +
+                    `  "include": ["standalone-scripts/${scriptName}/src/**/*.ts", "standalone-scripts/types/**/*.d.ts"],\n` +
+                    `  "compilerOptions": { "outDir": "standalone-scripts/${scriptName}/dist" }\n` +
+                    `}`,
+            };
+        case "viteConfig":
+            return {
+                file: `vite.config.${scriptName}.ts`,
+                jsonPath: "(create file)",
+                snippet:
+                    `import { defineConfig } from "vite";\n` +
+                    `export default defineConfig({\n` +
+                    `  build: {\n` +
+                    `    outDir: "standalone-scripts/${scriptName}/dist",\n` +
+                    `    emptyOutDir: false,\n` +
+                    `    lib: {\n` +
+                    `      entry: "standalone-scripts/${scriptName}/src/index.ts",\n` +
+                    `      formats: ["iife"],\n` +
+                    `      name: "${scriptName.replace(/[-_](.)/g, (_, c) => c.toUpperCase())}",\n` +
+                    `      fileName: () => "${scriptName}.js",\n` +
+                    `    },\n` +
+                    `  },\n` +
+                    `});`,
+            };
+        default:
+            return { file: "(unknown)", jsonPath: "(unknown)", snippet: "(no hint)" };
+    }
+}
+
 const scripts = discoverScripts();
 const report = scripts.map((name) => ({
     name,
@@ -253,7 +356,32 @@ for (const r of report) {
 }
 console.log("");
 
-// Section B — resolved dist paths
+// Section A2 — exact missing locations + ready-to-paste snippets
+const scriptsWithGaps = report.filter((r) => Object.values(r.checks).some((v) => !v));
+if (scriptsWithGaps.length > 0) {
+    console.log(SR);
+    console.log("  Section A2 — Fix-it instructions (per missing location)");
+    console.log("  Copy/paste each snippet into the listed file at the listed");
+    console.log("  JSON path / YAML key. After patching, re-run this script.");
+    console.log(SR);
+
+    for (const r of scriptsWithGaps) {
+        const missing = locKeys.filter((k) => !r.checks[k]);
+        console.log(`  → ${r.name}  (${missing.length} missing location(s))`);
+        for (const k of missing) {
+            const hint = fixHint(k, r.name);
+            console.log(`     [${LOCATION_LABELS[k]}]`);
+            console.log(`       file:     ${hint.file}`);
+            console.log(`       at:       ${hint.jsonPath}`);
+            console.log(`       snippet:`);
+            for (const line of hint.snippet.split("\n")) {
+                console.log(`         ${line}`);
+            }
+            console.log("");
+        }
+    }
+}
+
 console.log(SR);
 console.log("  Section B — Resolved dist paths (post-build)");
 console.log("  Empty/missing dist folders mean the script's build:<name>");
@@ -330,6 +458,26 @@ if (process.env.GITHUB_STEP_SUMMARY) {
         }
         lines.push("```");
         lines.push("");
+    }
+    if (scriptsWithGaps.length > 0) {
+        lines.push("## Fix-it instructions");
+        lines.push("");
+        lines.push("Each row lists the exact file + JSON path / YAML key + snippet to add.");
+        lines.push("");
+        for (const r of scriptsWithGaps) {
+            const missing = locKeys.filter((k) => !r.checks[k]);
+            lines.push(`### \`${r.name}\` — ${missing.length} missing`);
+            lines.push("");
+            for (const k of missing) {
+                const hint = fixHint(k, r.name);
+                lines.push(`**${LOCATION_LABELS[k]}** — \`${hint.file}\` @ \`${hint.jsonPath}\``);
+                lines.push("");
+                lines.push("```");
+                lines.push(hint.snippet);
+                lines.push("```");
+                lines.push("");
+            }
+        }
     }
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
 }
