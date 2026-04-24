@@ -229,7 +229,6 @@ function getMockResponse(message: MessagePayload): string | number | boolean | n
                 { scriptId: "s2", scriptName: "ui-enhancer.js", isSuccess: true, durationMs: 8 },
                 { scriptId: "s3", scriptName: "metrics.js", isSuccess: true, durationMs: 5 },
             ],
-            inlineSyntaxErrorDetected: false,
         },
         GET_CACHE_STATS: {
             entryCount: 7,

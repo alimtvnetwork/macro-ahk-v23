@@ -24,18 +24,15 @@ let failed = false;
 for (const [project, requiredFiles] of Object.entries(REQUIRED_ARTIFACTS)) {
   const distDir = path.join(STANDALONE_DIR, project, "dist");
 
-  // marco-sdk has a short-name script (build:sdk); all others use their folder name.
-  const buildScript = project === "marco-sdk" ? "sdk" : project;
-
   if (!fs.existsSync(distDir)) {
-    console.error(`[FAIL] ${project}/dist/ does not exist. Run: npm run build:${buildScript}`);
+    console.error(`[FAIL] ${project}/dist/ does not exist. Run: npm run build:${project === "marco-sdk" ? "sdk" : project}`);
     failed = true;
     continue;
   }
 
   const files = fs.readdirSync(distDir);
   if (files.length === 0) {
-    console.error(`[FAIL] ${project}/dist/ is empty. Run: npm run build:${buildScript}`);
+    console.error(`[FAIL] ${project}/dist/ is empty. Run: npm run build:${project === "marco-sdk" ? "sdk" : project}`);
     failed = true;
     continue;
   }
