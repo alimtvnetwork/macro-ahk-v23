@@ -641,6 +641,61 @@ jobs:
           name: payment-banner-hider-dist
           path: standalone-scripts/payment-banner-hider/dist/
 
+      # ── Downloaded bundle provenance log ────────────────────────
+      # Mirror of the build-side provenance step. Prints the absolute
+      # path, byte size, SHA-256, and instruction.json version of the
+      # bundle the smoke test will load. If the test fails with
+      # "bundle missing" or "behaviour drifted", compare these two
+      # logs side-by-side: same SHA → identical artifact reached the
+      # runner. Different SHA → cache/staging issue between jobs.
+      - name: Log downloaded bundle provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIST_DIR="$(pwd)/standalone-scripts/payment-banner-hider/dist"
+          BUNDLE="${DIST_DIR}/payment-banner-hider.js"
+          INSTRUCTION="${DIST_DIR}/instruction.json"
+
+          echo "── Resolved dist directory ───────────────────────────"
+          echo "DIST_DIR=${DIST_DIR}"
+          ls -la "$DIST_DIR" || true
+          echo "──────────────────────────────────────────────────────"
+
+          if [ ! -f "$BUNDLE" ]; then
+            echo "::error file=standalone-scripts/payment-banner-hider/dist/payment-banner-hider.js,title=Bundle missing in e2e job::Expected ${BUNDLE} after downloading artifact 'payment-banner-hider-dist'. Check that build-payment-banner-hider's upload-artifact step published a file at this path."
+            exit 1
+          fi
+          if [ ! -f "$INSTRUCTION" ]; then
+            echo "::error file=standalone-scripts/payment-banner-hider/dist/instruction.json,title=instruction.json missing in e2e job::Expected ${INSTRUCTION}. Artifact 'payment-banner-hider-dist' did not include it."
+            exit 1
+          fi
+
+          BYTES=$(wc -c < "$BUNDLE" | tr -d ' ')
+          SHA=$(sha256sum "$BUNDLE" | awk '{print $1}')
+          VERSION=$(node -p "require('${INSTRUCTION}').version")
+          NAME=$(node -p "require('${INSTRUCTION}').name")
+
+          echo "[pbh-smoke] bundle_path=${BUNDLE}"
+          echo "[pbh-smoke] bundle_bytes=${BYTES}"
+          echo "[pbh-smoke] bundle_sha256=${SHA}"
+          echo "[pbh-smoke] artifact_name=${NAME}"
+          echo "[pbh-smoke] artifact_version=${VERSION}"
+
+          {
+            echo "## 🧪 Payment Banner Hider — Smoke Test Input"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Artifact name | \`${NAME}\` |"
+            echo "| Version | \`${VERSION}\` |"
+            echo "| Resolved bundle path | \`${BUNDLE}\` |"
+            echo "| Size (bytes) | \`${BYTES}\` |"
+            echo "| SHA-256 | \`${SHA}\` |"
+            echo "| Source artifact | \`payment-banner-hider-dist\` (from \`build-payment-banner-hider\`) |"
+            echo ""
+            echo "Compare SHA-256 with the **Built Bundle** summary in the build job — identical hashes confirm the exact same artifact reached this runner."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install Playwright browsers (chromium only)
         run: npx playwright install --with-deps chromium
 
