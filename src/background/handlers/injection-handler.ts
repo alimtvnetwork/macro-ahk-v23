@@ -552,7 +552,7 @@ async function executeCachedPayload(
     pipelineStart: number,
     timings: Record<string, number>,
     time: <T>(label: string, fn: () => Promise<T>) => Promise<T>,
-): Promise<{ results: InjectionResult[] }> {
+): Promise<{ results: InjectionResult[]; inlineSyntaxErrorDetected: boolean }> {
     const allProjects = await time("readAllProjects", () =>
         readAllProjects().catch(() => [] as StoredProject[]));
 
@@ -632,7 +632,10 @@ async function executeCachedPayload(
         void showInjectionToastInTab(tabId, successCount, results.length, totalMs).catch(() => {});
     }
 
-    return { results };
+    // Cached path skips the syntax preflight entirely (only reachable when
+    // the request fingerprint matches a previously-validated payload), so
+    // the inline-syntax flag is always false here.
+    return { results, inlineSyntaxErrorDetected: false };
 }
 
 
