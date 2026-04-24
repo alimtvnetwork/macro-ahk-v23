@@ -301,13 +301,22 @@ export async function handleInjectScripts(
         console.log("[injection] FORCE RUN — pipeline cache cleared by user");
     }
 
+    if (isForceRun) {
+        console.log(
+            "[injection:syntax-preflight] SKIPPED — forceReload=true, syntax preflight bypassed (raw scripts=%d)",
+            msg.scripts.length,
+        );
+    }
     const hasInlineSyntaxError = !isForceRun && requestHasInlineSyntaxError(msg.scripts as InjectionRequestScript[]);
     const inlineSyntaxFailures = hasInlineSyntaxError
         ? collectInlineSyntaxFailures(msg.scripts as InjectionRequestScript[])
         : [];
     if (hasInlineSyntaxError) {
         await cacheDelete(PIPELINE_CACHE_CATEGORY, PIPELINE_CACHE_KEY);
-        console.log("[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared");
+        console.warn(
+            "[injection] CACHE BYPASS — inline syntax error detected in request, stale payload cleared. Failing scripts: [%s]",
+            inlineSyntaxFailures.map((f) => `${f.scriptId} (${f.errorMessage ?? "no message"})`).join(" | "),
+        );
     }
 
     // ── Cache Gate: check for cached wrapped payload ──
@@ -747,8 +756,18 @@ function detectSyntaxError(code: string): string | null {
         return null;
     } catch (err) {
         if (err instanceof SyntaxError) {
+            console.debug(
+                "[injection:syntax-preflight] detectSyntaxError caught SyntaxError (codeLen=%d): %s",
+                code.length,
+                err.message,
+            );
             return err.message;
         }
+        console.debug(
+            "[injection:syntax-preflight] detectSyntaxError caught non-SyntaxError (codeLen=%d): %s",
+            code.length,
+            err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+        );
         return null;
     }
 }
