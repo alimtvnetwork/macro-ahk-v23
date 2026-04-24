@@ -544,6 +544,56 @@ jobs:
       - name: Build Payment Banner Hider
         run: pnpm run build:payment-banner-hider
 
+      # ── Bundle provenance log ───────────────────────────────────
+      # Print the absolute bundle path, byte size, SHA-256, and the
+      # version string from instruction.json BEFORE upload. When the
+      # downstream `e2e-payment-banner-hider` job complains the
+      # bundle is missing or stale, this log answers two questions
+      # in one click: (1) what file did we publish, (2) which version.
+      # Surfaced both to the build log AND to GITHUB_STEP_SUMMARY.
+      - name: Log built bundle provenance
+        id: pbh-build-provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIST_DIR="$(pwd)/standalone-scripts/payment-banner-hider/dist"
+          BUNDLE="${DIST_DIR}/payment-banner-hider.js"
+          INSTRUCTION="${DIST_DIR}/instruction.json"
+
+          if [ ! -f "$BUNDLE" ]; then
+            echo "::error file=standalone-scripts/payment-banner-hider/dist/payment-banner-hider.js,title=Bundle missing after build::Expected ${BUNDLE} but it was not produced. Check vite.config.payment-banner-hider.ts output.fileName."
+            ls -la "$DIST_DIR" || echo "(dist dir missing)"
+            exit 1
+          fi
+          if [ ! -f "$INSTRUCTION" ]; then
+            echo "::error file=standalone-scripts/payment-banner-hider/dist/instruction.json,title=instruction.json missing::Expected ${INSTRUCTION}. Check scripts/compile-instruction.mjs."
+            exit 1
+          fi
+
+          BYTES=$(wc -c < "$BUNDLE" | tr -d ' ')
+          SHA=$(sha256sum "$BUNDLE" | awk '{print $1}')
+          VERSION=$(node -p "require('${INSTRUCTION}').version")
+          NAME=$(node -p "require('${INSTRUCTION}').name")
+
+          echo "bundle_path=${BUNDLE}"          | tee -a "$GITHUB_OUTPUT"
+          echo "bundle_bytes=${BYTES}"          | tee -a "$GITHUB_OUTPUT"
+          echo "bundle_sha256=${SHA}"           | tee -a "$GITHUB_OUTPUT"
+          echo "artifact_version=${VERSION}"    | tee -a "$GITHUB_OUTPUT"
+          echo "artifact_name=${NAME}"          | tee -a "$GITHUB_OUTPUT"
+
+          {
+            echo "## 📦 Payment Banner Hider — Built Bundle"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Artifact name | \`${NAME}\` |"
+            echo "| Version | \`${VERSION}\` |"
+            echo "| Bundle path | \`${BUNDLE}\` |"
+            echo "| Size (bytes) | \`${BYTES}\` |"
+            echo "| SHA-256 | \`${SHA}\` |"
+            echo "| Uploaded as | \`payment-banner-hider-dist\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Payment Banner Hider dist
         uses: actions/upload-artifact@v4
         with:
