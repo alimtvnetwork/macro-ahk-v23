@@ -67,10 +67,11 @@ async function globalSetup() {
   // to already exist on disk. CI builds them in parallel jobs; for local/playwright runs we
   // must build them sequentially first, then run the extension build.
   const buildSteps: { label: string; script: string; timeout: number }[] = [
-    { label: 'marco-sdk',        script: 'build:sdk',              timeout: 180_000 },
-    { label: 'xpath',            script: 'build:xpath',            timeout: 180_000 },
-    { label: 'macro-controller', script: 'build:macro-controller', timeout: 240_000 },
-    { label: 'extension',        script: 'build:extension',        timeout: 240_000 },
+    { label: 'marco-sdk',            script: 'build:sdk',                   timeout: 180_000 },
+    { label: 'xpath',                script: 'build:xpath',                 timeout: 180_000 },
+    { label: 'payment-banner-hider', script: 'build:payment-banner-hider',  timeout: 180_000 },
+    { label: 'macro-controller',     script: 'build:macro-controller',      timeout: 240_000 },
+    { label: 'extension',            script: 'build:extension',             timeout: 240_000 },
   ];
 
   for (const step of buildSteps) {

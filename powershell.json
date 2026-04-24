@@ -30,7 +30,8 @@
     "required": [
       { "folder": "marco-sdk", "files": ["marco-sdk.js"] },
       { "folder": "macro-controller", "files": ["macro-looping.js"] },
-      { "folder": "xpath", "files": ["xpath.js"] }
+      { "folder": "xpath", "files": ["xpath.js"] },
+      { "folder": "payment-banner-hider", "files": ["payment-banner-hider.js"] }
     ]
   }
 }
