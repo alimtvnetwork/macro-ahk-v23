@@ -1,5 +1,6 @@
 import { test, expect, openPopupPage } from './fixtures';
 import type { BrowserContext, Page } from '@playwright/test';
+import type { InjectScriptsResponse, InjectionResult } from '../../src/shared/injection-types';
 
 /**
  * Script Injection E2E Suite
@@ -88,24 +89,18 @@ async function findTestTabId(extPage: Page): Promise<number> {
 /*  Result-shape helpers                                              */
 /* ------------------------------------------------------------------ */
 
-interface InjectionScriptResult {
-  scriptId: string;
-  isSuccess: boolean;
-  errorMessage?: string;
-  skipReason?: string;
-}
-
-interface InjectionResponse {
-  results: InjectionScriptResult[];
-  /**
-   * Set by the background injection handler to signal that the inline
-   * syntax preflight (`requestHasInlineSyntaxError`) tripped on this
-   * request. Tests use this to verify the preflight path was actually
-   * taken — instead of relying on log scraping or coincidental failure
-   * shapes that other code paths can produce.
-   */
-  inlineSyntaxErrorDetected?: boolean;
-}
+/**
+ * The handler returns a richer payload than this file needs (full
+ * `InjectionResult` rows with timing + injection-path metadata). Aliasing
+ * keeps the tests readable while staying structurally bound to the
+ * shared type — adding/renaming a field on `InjectScriptsResponse`
+ * automatically propagates here.
+ */
+type InjectionScriptResult = Pick<
+  InjectionResult,
+  'scriptId' | 'isSuccess' | 'errorMessage' | 'skipReason'
+>;
+type InjectionResponse = InjectScriptsResponse;
 
 /**
  * Render the entire results array into a multi-line diagnostic string so

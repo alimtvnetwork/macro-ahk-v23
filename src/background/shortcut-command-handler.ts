@@ -8,7 +8,7 @@
  */
 
 import type { ScriptEntry } from "../shared/project-types";
-import type { InjectionResult } from "../shared/injection-types";
+import type { InjectScriptsResponse } from "../shared/injection-types";
 import { MessageType } from "../shared/messages";
 import { handleMessage } from "./message-router";
 import { logCaughtError, logBgWarnError, BgLogTag} from "./bg-logger";
@@ -79,7 +79,7 @@ async function runScriptsFromShortcut(forceReload: boolean): Promise<void> {
 
         console.log("[Marco] Shortcut: injecting %d scripts into tab %d", scripts.length, activeTabId);
 
-        const response = await sendInternalMessage<{ results?: InjectionResult[] }>({
+        const response = await sendInternalMessage<InjectScriptsResponse>({
             type: MessageType.INJECT_SCRIPTS,
             tabId: activeTabId,
             scripts,
@@ -88,8 +88,10 @@ async function runScriptsFromShortcut(forceReload: boolean): Promise<void> {
 
         const elapsed = Math.round(performance.now() - t0);
         const resultCount = response?.results ? response.results.length : 0;
+        const syntaxFlag = response?.inlineSyntaxErrorDetected ?? false;
 
-        console.log("[Marco] Shortcut: injection complete — %d results in %dms", resultCount, elapsed);
+        console.log("[Marco] Shortcut: injection complete — %d results in %dms (inlineSyntaxErrorDetected=%s)",
+            resultCount, elapsed, syntaxFlag);
     } catch (runError) {
         logCaughtError(BgLogTag.SHORTCUT, "Shortcut run failed", runError);
     }
