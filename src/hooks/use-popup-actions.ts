@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- chrome runtime detection via globalThis */
 import type { ScriptEntry } from "@/shared/project-types";
 import type { InjectScriptsResponse, InjectionResult } from "@/shared/injection-types";
+import { normalizeInjectScriptsResponse } from "@/shared/injection-types";
 import { useState, useCallback, useRef } from "react";
 import { sendMessage } from "@/lib/message-client";
 import { getPlatform } from "@/platform";
@@ -88,14 +89,24 @@ export function usePopupActions() {
       }
 
       console.log("[popup:handleRun] Sending INJECT_SCRIPTS for tab %d with %d scripts...%s", tabId, scripts.length, isForce ? " forceReload=true" : "");
-      const result = await sendMessage<InjectScriptsResponse>({
+      const rawResult = await sendMessage<InjectScriptsResponse>({
         type: "INJECT_SCRIPTS",
         tabId,
         scripts,
         ...(isForce ? { forceReload: true } : {}),
       });
-      console.log("[popup:handleRun] Injection result: %d scripts, inlineSyntaxErrorDetected=%s",
-        result.results.length, result.inlineSyntaxErrorDetected);
+      // Normalize tolerates older backgrounds that omit
+      // `inlineSyntaxErrorDetected` — without this, downstream
+      // `if (result.inlineSyntaxErrorDetected)` checks would silently
+      // misbehave when talking to a pre-flag service worker.
+      const result = normalizeInjectScriptsResponse(rawResult);
+      if (result.inlineSyntaxFlagSource === "legacy-default") {
+        console.warn(
+          "[popup:handleRun] Background did not return inlineSyntaxErrorDetected — falling back to false (older background build).",
+        );
+      }
+      console.log("[popup:handleRun] Injection result: %d scripts, inlineSyntaxErrorDetected=%s (source=%s)",
+        result.results.length, result.inlineSyntaxErrorDetected, result.inlineSyntaxFlagSource);
 
       setLastRunResults(
         result.results.map((r) => ({
