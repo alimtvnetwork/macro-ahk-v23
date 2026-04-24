@@ -20,6 +20,13 @@ Updated: just now
 - **Error Handling**: Defensive property access (`?.`, `??`) required. CQ14 (braces), CQ15 (newlines).
 - **Auth Contract**: Use single-path `getBearerToken()` contract. No legacy auth methods.
 - **Installer Contract**: All install scripts MUST conform to `spec/14-update/01-generic-installer-behavior.md` — strict on `--version`/release-URL, latest→main fallback otherwise, opt-in parallel sibling-repo discovery.
+- **Pre-Write Check**: Before writing any new file in a known project area, read the closest existing sibling AND the relevant coding guideline. Reference: `mem://standards/pre-write-check`.
+- **No `!important`**: Banned in all CSS/LESS sources and inline TS style strings. Use selector specificity. Single exception: emergency CSS sentinel with `// JUSTIFIED:` comment. Reference: `mem://standards/no-css-important`.
+- **No Error Swallowing**: Every `catch` must log via namespace Logger, re-throw, or carry an inline `// SWALLOW JUSTIFIED: <reason>` comment. Reference: `mem://standards/no-error-swallowing`.
+- **No Type Casting**: `as T`, `as unknown as T`, `<T>value`, `as any` are banned in `standalone-scripts/**`. Use type guards or typed globals declared in `standalone-scripts/types/`. Reference: `mem://standards/no-type-casting`.
+- **Class-Based Standalone Scripts**: Every `standalone-scripts/<project>/src/index.ts` exports a single default class (PascalCase code name). No module-level free functions. Reference: `mem://standards/class-based-standalone-scripts`.
+- **CSS in Own File**: Standalone-scripts CSS lives in `<project>/less/` or `<project>/css/`, compiles to `dist/`, and is declared in `instruction.assets.css[]`. No inline `document.createElement("style")` blobs. Reference: `mem://standards/standalone-scripts-css-in-own-file`.
+- **Blank Line Before Return**: Every multi-statement function body must have a blank line before each `return`. ESLint `padding-line-between-statements`. Reference: `mem://standards/blank-line-before-return`.
 
 ## Memories
 - [Timezone](mem://localization/timezone) — Asia/Kuala_Lumpur for local timezone formatting
