@@ -179,6 +179,24 @@ Memory: `.lovable/memory/features/release-installer.md`
 
 ---
 
+## 2026-04-24 Session — Standalone-Scripts Global Types Refactor (DRAFT, awaiting review)
+
+Spec: `spec/21-app/01-chrome-extension/standalone-scripts-types/01-overview.md`
+
+| # | Task                                                                                                                              | Status        |
+|---|-----------------------------------------------------------------------------------------------------------------------------------|---------------|
+| 1 | **Draft spec** for unified `ProjectInstruction`, per-file types, enums, XPath groups + relative XPath, no-`unknown` rule.         | ✅ Done (this session) |
+| 2 | **User review** of `spec/21-app/01-chrome-extension/standalone-scripts-types/01-overview.md` — answer Open Questions Q1–Q4.       | ⏸️ Blocked on user |
+| 3 | **Create** `standalone-scripts/types/instruction/{01..40}-*.ts` files (one type per file) per spec §5.                            | ⏸️ Pending review |
+| 4 | **Refactor** `marco-sdk`, `xpath`, `macro-controller`, `payment-banner-hider` `instruction.ts` to import shared types.            | ⏸️ Pending #3 |
+| 5 | **Replace** `Record<string, unknown>` in `NamespaceLogApi` (and Vars/Kv/Files/Db/Notify APIs) per spec §8.                        | ⏸️ Pending review |
+| 6 | **Add** ESLint overrides for `standalone-scripts/**`: `consistent-type-definitions: type`, `id-denylist`, `unknown` ban.          | ⏸️ Pending #3 |
+| 7 | **Snapshot test**: assert `dist/instruction.json` byte-identical pre/post refactor for all 4 projects.                            | ⏸️ Pending #4 |
+
+**Recommended next**: Task 2 — user review of the draft spec.
+
+---
+
 ## Engineering Principles (Summary)
 
 1. Root Cause Analysis First
