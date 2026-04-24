@@ -257,6 +257,8 @@ test.describe('Script Injection', () => {
     const response = injectionResult as InjectionResponse;
     expect(response.results, 'INJECT_SCRIPTS returned no results array').toBeDefined();
     expectScriptSucceeded(response, 'e2e-test-script-001');
+    // Clean inline script — preflight ran and passed, flag must be false.
+    expectInlineSyntaxFlag(response, false, 'clean inline script — preflight should pass');
 
     // Verify the DOM side-effect on the test page
     const injectedElement = testPage.locator('#marco-e2e-injected');
@@ -309,6 +311,8 @@ test.describe('Script Injection', () => {
     const response = injectionResult as InjectionResponse;
     expect(response.results, 'INJECT_SCRIPTS returned no results array').toBeDefined();
     expectScriptFailedWithError(response, 'e2e-bad-script-001');
+    // Bad-syntax inline script — preflight must trip and surface the flag.
+    expectInlineSyntaxFlag(response, true, 'inline syntax error — preflight should trip');
 
     await extPage.close();
   });
@@ -394,6 +398,8 @@ test.describe('Script Injection', () => {
     // table, instead of an unhelpful empty-string title diff later.
     const response = injectionResult as InjectionResponse;
     expectScriptSucceeded(response, 'e2e-clean-script');
+    // Clean inline script — preflight passes, flag must be false.
+    expectInlineSyntaxFlag(response, false, 'clean inline script — preflight should pass');
 
     // Wait for the title mutation to apply (poll instead of fixed sleep).
     await expect.poll(
